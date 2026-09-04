@@ -32,6 +32,9 @@ const props = withDefaults(
 const cv = ref<HTMLCanvasElement | null>(null)
 let raf = 0
 let running = true
+/** 入场生长进度 0→1（约 2.2s），线条由内向外依次展开 */
+let intro = 0
+const INTRO_DURATION = 2200
 
 // 每条线的独立参数（生成一次，避免每帧随机抖动）
 type Lane = {
@@ -67,6 +70,7 @@ function makeLanes(n: number): Lane[] {
 }
 
 let lanes: Lane[] = []
+let startTime = 0
 
 function draw(time: number) {
   const canvas = cv.value
@@ -88,16 +92,28 @@ function draw(time: number) {
   const R = cssSize * 0.46
   const t = time / 1000
 
+  // 入场生长：easeOutCubic，从 0 到 1
+  if (intro < 1) {
+    intro = Math.min(1, (time - startTime) / INTRO_DURATION)
+    intro = 1 - Math.pow(1 - intro, 3)
+  }
+
   ctx.strokeStyle = '#111111'
   ctx.lineCap = 'round'
 
   for (const lane of lanes) {
     const wob = Math.sin(t * 0.6 + lane.phase) * lane.breathe
-    const rx = lane.rx * R * (1 + wob)
-    const ry = lane.ry * R * (1 - wob)
+    // 每条线按自身半径错峰出现：内侧先展开，外侧后展开
+    const laneStart = (lane.rx - 0.55) / 0.45 // 0~1
+    const laneProgress = Math.max(0, Math.min(1, (intro - laneStart * 0.5) / 0.5))
+    if (laneProgress <= 0) continue
+
+    const grow = 0.55 + 0.45 * laneProgress // 弧线从 55% 大小生长到 100%
+    const rx = lane.rx * R * grow * (1 + wob)
+    const ry = lane.ry * R * grow * (1 - wob)
     const rot = t * props.speed + lane.phase * 0.35
 
-    ctx.globalAlpha = props.alpha * lane.a
+    ctx.globalAlpha = props.alpha * lane.a * laneProgress
     ctx.lineWidth = lane.w
     ctx.beginPath()
     ctx.ellipse(cx, cy, Math.max(rx, 1), Math.max(ry, 1), rot, 0, Math.PI * 2)
@@ -108,6 +124,7 @@ function draw(time: number) {
 
 function loop(time: number) {
   if (!running) return
+  if (!startTime) startTime = time
   draw(time)
   raf = requestAnimationFrame(loop)
 }

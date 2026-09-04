@@ -1,12 +1,10 @@
 <template>
   <div class="page">
-    <!-- 极淡网格背景，仅此一处装饰 -->
-    <div class="scene" aria-hidden="true">
-      <div class="grid" />
-    </div>
-
     <header class="hero">
-      <nav class="nav">
+      <!-- 极淡网格，仅存在于 Hero 区 -->
+      <div class="grid" aria-hidden="true" />
+
+      <nav class="nav nav-enter">
         <div class="nav-brand">
           <img class="logo-img" src="/logo.png" alt="logo" />
           <span class="brand-name">{{ site?.brand || '软工集市' }}</span>
@@ -18,84 +16,90 @@
       </nav>
 
       <div class="hero-inner">
-        <!-- 左：文案 -->
-        <div class="hero-copy reveal in">
-          <div class="hero-eyebrow">
+        <!-- 左：文案（逐级渐显） -->
+        <div class="hero-copy">
+          <div class="hero-eyebrow enter" style="--d: 0.1s">
             <span class="eyebrow-line" />
             <span>{{ site?.tagline || '让每个热爱技术的人，都能找到属于他的舞台' }}</span>
           </div>
-          <h1 class="hero-title">{{ heroTitleMain }}<span class="hero-title-accent">{{ heroTitleRest }}</span></h1>
-          <p class="hero-sub">{{ heroLines.join(' ') }}</p>
-          <div class="hero-actions">
+          <h1 class="hero-title enter" style="--d: 0.22s">
+            {{ heroTitleMain }}<span class="hero-title-accent">{{ heroTitleRest }}</span>
+          </h1>
+          <p class="hero-sub enter" style="--d: 0.36s">{{ heroLines.join(' ') }}</p>
+          <div class="hero-actions enter" style="--d: 0.5s">
             <a href="#jobs" class="btn btn-primary btn-lg">查看职位 <span class="arrow">→</span></a>
             <a href="https://ssemarket.cn" target="_blank" class="btn btn-ghost btn-lg">了解我们</a>
           </div>
         </div>
 
-        <!-- 右：线条球图案（还原混元式流动线条） -->
-        <div class="hero-art reveal in" aria-hidden="true">
-          <LineOrb :size="orbSize" :lines="72" :alpha="0.14" :speed="0.1" />
+        <!-- 右：线条球（Canvas 内部实现从无到有的生长动画） -->
+        <div class="hero-art" aria-hidden="true">
+          <LineOrb :size="orbSize" :lines="72" :alpha="0.15" :speed="0.1" />
         </div>
       </div>
     </header>
 
-    <main id="jobs" class="container">
-      <section v-if="site?.announcement" class="announce reveal">
-        <span class="announce-dot" />
-        <span class="announce-text">{{ site.announcement }}</span>
-      </section>
+    <!-- 职位区：独立白色色带，与 Hero 灰底形成清晰分界 -->
+    <main id="jobs" class="band">
+      <div class="container">
+        <section v-if="site?.announcement" v-reveal class="announce">
+          <span class="announce-dot" />
+          <span class="announce-text">{{ site.announcement }}</span>
+        </section>
 
-      <section class="section-head reveal">
-        <div>
-          <h2 class="section-title">开放职位</h2>
-          <p class="section-sub">共 {{ filtered.length }} 个职位正在招聘</p>
+        <section v-reveal class="section-head">
+          <div>
+            <h2 class="section-title">开放职位</h2>
+            <p class="section-sub">共 {{ filtered.length }} 个职位正在招聘</p>
+          </div>
+          <input v-model="q" class="search" placeholder="搜索职位 / 部门…" @input="filterJobs" />
+        </section>
+
+        <div v-if="loading" class="empty"><span class="spinner" />加载中…</div>
+        <p v-if="error" class="error">{{ error }}</p>
+
+        <div v-else-if="filtered.length === 0" class="empty">暂无开放职位</div>
+
+        <div v-else class="job-list">
+          <RouterLink
+            v-for="(job, i) in filtered"
+            :key="job.id"
+            v-reveal
+            :to="`/jobs/${job.slug}`"
+            class="job-row"
+            :style="{ transitionDelay: `${Math.min(i * 70, 350)}ms` }"
+          >
+            <div class="job-main">
+              <div class="job-title-row">
+                <h3 class="job-title">{{ job.title }}</h3>
+                <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
+              </div>
+              <p class="job-summary">{{ job.summary }}</p>
+              <div class="job-meta">
+                <span>{{ job.department }}</span>
+                <span class="sep" />
+                <span>{{ job.location || '远程' }}</span>
+                <span v-if="job.headcount" class="sep" />
+                <span v-if="job.headcount">招 {{ job.headcount }} 人</span>
+              </div>
+            </div>
+            <div class="job-side">
+              <span class="job-cta">投递 <span class="arrow">→</span></span>
+            </div>
+          </RouterLink>
         </div>
-        <input v-model="q" class="search" placeholder="搜索职位 / 部门…" @input="filterJobs" />
-      </section>
 
-      <div v-if="loading" class="empty"><span class="spinner" />加载中…</div>
-      <p v-if="error" class="error">{{ error }}</p>
-
-      <div v-else-if="filtered.length === 0" class="empty">暂无开放职位</div>
-
-      <div v-else class="job-list">
-        <RouterLink
-          v-for="(job, i) in filtered"
-          :key="job.id"
-          :to="`/jobs/${job.slug}`"
-          class="job-row reveal"
-          :style="{ transitionDelay: `${Math.min(i * 60, 300)}ms` }"
-        >
-          <div class="job-main">
-            <div class="job-title-row">
-              <h3 class="job-title">{{ job.title }}</h3>
-              <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
-            </div>
-            <p class="job-summary">{{ job.summary }}</p>
-            <div class="job-meta">
-              <span>{{ job.department }}</span>
-              <span class="sep" />
-              <span>{{ job.location || '远程' }}</span>
-              <span v-if="job.headcount" class="sep" />
-              <span v-if="job.headcount">招 {{ job.headcount }} 人</span>
-            </div>
+        <footer v-reveal class="foot">
+          <div class="foot-line" />
+          <div class="foot-row">
+            <span class="foot-brand">{{ site?.brand || '软工集市' }} · 招聘</span>
+            <a class="foot-mail" :href="`mailto:${site?.contactEmail || 'hr@ssemarket.cn'}`">
+              {{ site?.contactEmail || 'hr@ssemarket.cn' }}
+            </a>
+            <span class="foot-copy">© {{ year }}</span>
           </div>
-          <div class="job-side">
-            <span class="job-cta">投递 <span class="arrow">→</span></span>
-          </div>
-        </RouterLink>
+        </footer>
       </div>
-
-      <footer class="foot reveal">
-        <div class="foot-line" />
-        <div class="foot-row">
-          <span class="foot-brand">{{ site?.brand || '软工集市' }} · 招聘</span>
-          <a class="foot-mail" :href="`mailto:${site?.contactEmail || 'hr@ssemarket.cn'}`">
-            {{ site?.contactEmail || 'hr@ssemarket.cn' }}
-          </a>
-          <span class="foot-copy">© {{ year }}</span>
-        </div>
-      </footer>
     </main>
   </div>
 </template>
@@ -111,11 +115,45 @@ const q = ref('')
 const loading = ref(true)
 const error = ref('')
 const year = new Date().getFullYear()
-const orbSize = ref(420)
+const orbSize = ref(440)
 
 const filtered = computed(() => jobs.value)
 
-/** 主标题拆分：最后一个词用品牌蓝强调（如「加入软工集市」→「加入」+「软工集市」） */
+/**
+ * v-reveal：滚动入场指令。
+ * 在每个元素挂载时单独 observe，修复「异步渲染的职位行永远透明」的问题
+ * （旧实现只在页面挂载时 observe 一次，后加载的元素观察不到）。
+ */
+const revealObserver =
+  'IntersectionObserver' in window
+    ? new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            if (e.isIntersecting) {
+              e.target.classList.add('in')
+              revealObserver?.unobserve(e.target)
+            }
+          }
+        },
+        { threshold: 0.08 },
+      )
+    : null
+
+const vReveal = {
+  mounted(el: HTMLElement) {
+    if (!revealObserver) {
+      el.classList.add('reveal', 'in')
+      return
+    }
+    el.classList.add('reveal')
+    revealObserver.observe(el)
+  },
+  unmounted(el: HTMLElement) {
+    revealObserver?.unobserve(el)
+  },
+}
+
+/** 主标题拆分：最后一个词用品牌蓝强调 */
 const heroTitleMain = computed(() => {
   const t = site.value?.heroTitle || '加入软工集市'
   const parts = t.split(/(\s+)/)
@@ -172,20 +210,14 @@ function badgeClass(t: string) {
   return map[t] || 'badge'
 }
 
-let observer: IntersectionObserver | null = null
 onMounted(() => {
   load()
   syncOrbSize()
   window.addEventListener('resize', syncOrbSize)
-  observer = new IntersectionObserver(
-    (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add('in')),
-    { threshold: 0.1 },
-  )
-  document.querySelectorAll('.reveal').forEach((n) => observer?.observe(n))
 })
 onUnmounted(() => {
-  observer?.disconnect()
   window.removeEventListener('resize', syncOrbSize)
+  revealObserver?.disconnect()
 })
 </script>
 
@@ -196,30 +228,60 @@ onUnmounted(() => {
   background: var(--bg);
 }
 
-/* ===== 背景：一层极淡网格，足够 ===== */
-.scene {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
+/* ===== Hero：灰底 + 极淡网格（网格只在 Hero 内，不渗入职位区） ===== */
+.hero {
+  position: relative;
   overflow: hidden;
+  background: var(--bg);
+  border-bottom: 1px solid var(--line);
 }
 .grid {
   position: absolute;
   inset: 0;
+  pointer-events: none;
   background-image:
     linear-gradient(rgba(31, 35, 41, 0.028) 1px, transparent 1px),
     linear-gradient(90deg, rgba(31, 35, 41, 0.028) 1px, transparent 1px);
   background-size: 72px 72px;
-  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 80%);
+  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 20%, transparent 78%);
+}
+
+/* ===== 入场动画 ===== */
+.nav-enter {
+  animation: navIn 0.8s var(--ease) both;
+}
+@keyframes navIn {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.enter {
+  opacity: 0;
+  animation: heroIn 0.9s var(--ease) forwards;
+  animation-delay: var(--d, 0s);
+}
+@keyframes heroIn {
+  from {
+    opacity: 0;
+    transform: translateY(26px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+    filter: none;
+  }
 }
 
 /* ===== 导航 ===== */
-.hero {
+.nav {
   position: relative;
   z-index: 1;
-}
-.nav {
   max-width: 1080px;
   margin: 0 auto;
   padding: 20px 24px;
@@ -256,8 +318,10 @@ onUnmounted(() => {
   color: var(--brand);
 }
 
-/* ===== Hero：左文右图两栏，大留白 ===== */
+/* ===== Hero 两栏 ===== */
 .hero-inner {
+  position: relative;
+  z-index: 1;
   max-width: 1080px;
   margin: 0 auto;
   padding: 72px 24px 88px;
@@ -287,7 +351,7 @@ onUnmounted(() => {
   inset: 0;
   background: var(--brand);
   transform: translateX(-100%);
-  animation: lineSlide 3.2s var(--ease) infinite;
+  animation: lineSlide 3.2s var(--ease) infinite 1.2s;
 }
 @keyframes lineSlide {
   0% {
@@ -329,32 +393,32 @@ onUnmounted(() => {
   transform: translateX(3px);
 }
 
-/* 右侧线条球：缓慢自转的呼吸感，不做其他装饰 */
 .hero-art {
   display: flex;
   justify-content: center;
 }
 .hero-art :deep(canvas) {
-  animation: orbIn 1.4s var(--ease) both;
+  animation: orbFade 1.2s var(--ease) both 0.15s;
 }
-@keyframes orbIn {
+@keyframes orbFade {
   from {
     opacity: 0;
-    transform: scale(0.92);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
-/* ===== 职位列表：细分隔线的行式布局 ===== */
-.container {
+/* ===== 职位区：白色色带，与 Hero 灰底清晰分界 ===== */
+.band {
   position: relative;
   z-index: 1;
+  background: var(--bg-elevated);
+}
+.container {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 56px 24px 40px;
+  padding: 64px 24px 40px;
 }
 .announce {
   display: flex;
@@ -408,7 +472,7 @@ onUnmounted(() => {
   font-size: 14px;
 }
 
-/* 行式职位：靠细线分隔，hover 时轻抬升 + 右侧箭头 */
+/* 行式职位：细线分隔 + 滚动渐显 + hover 反馈 */
 .job-list {
   border-top: 1px solid var(--line);
 }
@@ -422,7 +486,7 @@ onUnmounted(() => {
   transition: background 0.2s ease, padding-left 0.25s var(--ease);
 }
 .job-row:hover {
-  background: #ffffff;
+  background: #fafbfc;
   padding-left: 20px;
 }
 .job-main {
