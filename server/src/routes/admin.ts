@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { db, now, type ApplicationRow, type JobRow } from '../db.js'
+import { db, now, type ApplicationRow, type JobRow, type SiteConfigRow } from '../db.js'
 import { ok, fail, requireAdminToken } from '../middleware.js'
 import { submitOa, queryOa } from '../dev-platform.js'
 import { buildOaBody } from './jobs.js'
@@ -233,4 +233,38 @@ adminRouter.get('/stats', requireAdminToken, (_req, res) => {
     passed: s.applications.filter((a) => a.status === 'passed').length,
     oaApproved: s.applications.filter((a) => a.oa_status === 'approved').length,
   })
+})
+
+// ===== 管理端：站点文案配置 =====
+adminRouter.get('/site', requireAdminToken, (_req, res) => {
+  ok(res, db.getStore().site_config)
+})
+
+const SITE_FIELDS = [
+  'brand',
+  'heroTitle',
+  'heroSubtitle',
+  'announcement',
+  'tagline',
+  'contactEmail',
+  'bgWords',
+] as const
+
+adminRouter.put('/site', requireAdminToken, async (req, res) => {
+  const b = (req.body || {}) as Record<string, unknown>
+  const s = db.getStore()
+  const sc: SiteConfigRow = s.site_config
+  for (const key of SITE_FIELDS) {
+    if (b[key] == null) continue
+    const max = key === 'heroSubtitle' || key === 'bgWords' ? 300 : 120
+    const val = String(b[key]).slice(0, max)
+    if (key === 'contactEmail' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
+      fail(res, 400, '联系邮箱格式不正确')
+      return
+    }
+    sc[key] = val
+  }
+  sc.updated_at = now()
+  await db.persist()
+  ok(res, sc, '站点配置已更新')
 })

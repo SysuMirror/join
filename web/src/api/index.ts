@@ -44,6 +44,17 @@ export interface AuthUser {
   is_admin: boolean
 }
 
+export interface SiteConfig {
+  brand: string
+  heroTitle: string
+  heroSubtitle: string
+  announcement: string
+  tagline: string
+  contactEmail: string
+  bgWords: string
+  updatedAt: string
+}
+
 function authConfig(token: string): Record<string, unknown> {
   return { headers: { Authorization: `Bearer ${token}` } }
 }
@@ -52,6 +63,7 @@ function authConfig(token: string): Record<string, unknown> {
 export const api = {
   jobs: () => http.get<Job[]>('api/jobs'),
   job: (slug: string) => http.get<Job>(`api/jobs/${slug}`),
+  site: () => http.get<SiteConfig>('api/site'),
   apply: (slug: string, body: { name?: string; contact: string; resume_url?: string; note?: string }) =>
     http.post(`api/jobs/${slug}/apply`, body),
   health: () => http.get<any>('api/health'),
@@ -83,4 +95,7 @@ export const api = {
     http.post(`api/admin/applications/refresh-oa`, {}, { ...authConfig(token), timeout: 30_000 }),
   adminStats: (token: string) =>
     http.get<any>('api/admin/stats', authConfig(token)),
+  adminSite: (token: string) => http.get<SiteConfig>('api/admin/site', authConfig(token)),
+  adminUpdateSite: (token: string, body: Partial<SiteConfig>) =>
+    http.put<SiteConfig>('api/admin/site', body, authConfig(token)),
 }

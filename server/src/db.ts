@@ -80,15 +80,48 @@ export type VerifyCodeRow = {
   created_at: string
 }
 
+/** 站点文案配置（单例，无 seq id：始终使用 s.site_config，migrate 时补默认值） */
+export type SiteConfigRow = {
+  /** 品牌名 */
+  brand: string
+  /** 首页 Hero 主标题 */
+  heroTitle: string
+  /** 首页 Hero 副标题（支持 \n 换行） */
+  heroSubtitle: string
+  /** 首页公告（顶部、可为空） */
+  announcement: string
+  /** 站点标语（页脚/logo 处展示） */
+  tagline: string
+  /** 联系邮箱（页脚/投递页展示 + mailto） */
+  contactEmail: string
+  /** 背景文案装饰（可空，用于展示更灵动） */
+  bgWords: string
+  updated_at: string
+}
+
 type Store = {
   seq: Record<string, number>
   jobs: JobRow[]
   applications: ApplicationRow[]
   users: UserRow[]
   verify_codes: VerifyCodeRow[]
+  site_config: SiteConfigRow
 }
 
 const SEQ_KEYS = ['jobs', 'applications', 'users', 'verify_codes'] as const
+
+function defaultSiteConfig(): SiteConfigRow {
+  return {
+    brand: '软工集市',
+    heroTitle: '加入软工集市',
+    heroSubtitle: '我们正在寻找热爱技术与创造的同学。\n投递后我们将尽快联系，合适的候选人会进入团队面试。',
+    announcement: '2026 秋季招聘 · 火热进行中，期待与你同行。',
+    tagline: '让每个热爱技术的人，都能找到属于他的舞台',
+    contactEmail: 'hr@ssemarket.cn',
+    bgWords: '技术 · 创造 · 热爱 · 成长',
+    updated_at: nowIso(),
+  }
+}
 
 function emptyStore(): Store {
   return {
@@ -97,6 +130,7 @@ function emptyStore(): Store {
     applications: [],
     users: [],
     verify_codes: [],
+    site_config: defaultSiteConfig(),
   }
 }
 
@@ -146,6 +180,14 @@ function migrate(s: Store): void {
     if (c.expires_at == null) c.expires_at = ''
     if (c.used == null) c.used = 0
   }
+  // site_config 单例兜底：合并默认值，缺失字段补默认
+  const def = defaultSiteConfig()
+  if (!s.site_config) s.site_config = def
+  const sc = s.site_config
+  for (const k of ['brand', 'heroTitle', 'heroSubtitle', 'announcement', 'tagline', 'contactEmail', 'bgWords'] as const) {
+    if (sc[k] == null) sc[k] = def[k]
+  }
+  if (sc.updated_at == null) sc.updated_at = nowIso()
 }
 
 function parseStore(raw: string | null): Store {

@@ -1,35 +1,93 @@
 <template>
   <div class="page">
+    <div class="bg-scene" aria-hidden="true">
+      <span class="orb orb-a" />
+      <span class="orb orb-b" />
+      <div class="grid-lines" />
+    </div>
+
     <div class="wrap">
       <header class="head">
-        <div>
+        <div class="head-info">
+          <div class="head-kicker">ADMIN CONSOLE</div>
           <h1 class="page-title">招聘管理</h1>
-          <p class="page-sub">管理职位、审核投递，初审通过后自动推送到开发者平台 OA 审批。</p>
+          <p class="page-sub">管理职位、调配站点文案、审核投递，初审通过后自动推送到开发者平台 OA 审批。</p>
         </div>
         <div class="auth">
-          <span class="muted small" v-if="me">{{ me.name }}（{{ me.email }}）</span>
-          <button class="btn btn-ghost" @click="logout">退出登录</button>
+          <div class="user-chip" v-if="me">
+            <span class="user-avatar">{{ (me.name || me.email)[0]?.toUpperCase() }}</span>
+            <span class="user-meta">
+              <span class="user-name">{{ me.name || me.email.split('@')[0] }}</span>
+              <span class="user-email">{{ me.email }}</span>
+            </span>
+          </div>
+          <button class="btn btn-ghost btn-sm" @click="logout">退出登录</button>
         </div>
       </header>
 
       <div v-if="entered">
         <div class="tabs">
-          <button
-            v-for="t in tabs"
-            :key="t.id"
-            class="tab"
-            :class="{ active: tab === t.id }"
-            @click="tab = t.id"
-          >
+          <button v-for="t in tabs" :key="t.id" class="tab" :class="{ active: tab === t.id }" @click="tab = t.id">
             {{ t.label }}
             <span v-if="t.id === 'apps' && stats.pendingReview" class="tab-badge">{{ stats.pendingReview }}</span>
           </button>
         </div>
 
+        <!-- ===== 站点文案配置 ===== -->
+        <section v-show="tab === 'site'" class="card panel">
+          <div class="row-between">
+            <div>
+              <h3>站点文案配置</h3>
+              <p class="hint">调整首页 Hero、公告、品牌与联系方式，保存后前台即时生效。</p>
+            </div>
+            <button class="btn btn-primary btn-sm" @click="saveSite" :disabled="siteSaving">
+              {{ siteSaving ? '保存中…' : '保存配置' }}
+            </button>
+          </div>
+          <div class="fields">
+            <div class="field">
+              <label>品牌名</label>
+              <input v-model="siteForm.brand" maxlength="60" />
+            </div>
+            <div class="field">
+              <label>联系邮箱</label>
+              <input v-model="siteForm.contactEmail" maxlength="120" />
+            </div>
+            <div class="field full">
+              <label>首页主标题（Hero）</label>
+              <input v-model="siteForm.heroTitle" maxlength="120" />
+            </div>
+            <div class="field full">
+              <label>首页副标题（换行用 \n）</label>
+              <textarea v-model="siteForm.heroSubtitle" rows="3" />
+            </div>
+            <div class="field full">
+              <label>顶部公告（留空则不显示）</label>
+              <input v-model="siteForm.announcement" maxlength="120" />
+            </div>
+            <div class="field full">
+              <label>页脚标语</label>
+              <input v-model="siteForm.tagline" maxlength="120" />
+            </div>
+            <div class="field full">
+              <label>背景装饰词（用 · 分隔）</label>
+              <input v-model="siteForm.bgWords" maxlength="300" />
+            </div>
+          </div>
+          <p v-if="siteMsg" class="site-msg" :class="siteMsgType">{{ siteMsg }}</p>
+        </section>
+
+        <!-- ===== 职位管理 ===== -->
         <section v-show="tab === 'jobs'" class="card panel">
           <div class="row-between">
             <h3>职位</h3>
             <button class="btn btn-ghost btn-sm" @click="openJobForm()">+ 新建职位</button>
+          </div>
+          <div class="stats-row" v-if="stats">
+            <div class="stat"><b>{{ stats.jobs }}</b><span>在招职位</span></div>
+            <div class="stat"><b>{{ stats.pendingReview }}</b><span>待初审</span></div>
+            <div class="stat"><b>{{ stats.passed }}</b><span>已通过</span></div>
+            <div class="stat"><b>{{ stats.oaApproved }}</b><span>OA 批准</span></div>
           </div>
           <table class="table" v-if="jobs.length">
             <thead>
@@ -51,6 +109,7 @@
           <div v-else class="empty">暂无职位</div>
         </section>
 
+        <!-- ===== 投递审核 ===== -->
         <section v-show="tab === 'apps'" class="card panel">
           <div class="toolbar">
             <select v-model="appFilter" @change="loadApps">
@@ -104,7 +163,7 @@
 
       <!-- 职位编辑弹窗 -->
       <div v-if="jobFormOpen" class="modal-backdrop" @click.self="jobFormOpen = false">
-        <form class="card modal wide" @submit.prevent="saveJob">
+        <form class="modal wide" @submit.prevent="saveJob">
           <h3>{{ editingJob ? '编辑职位' : '新建职位' }}</h3>
           <div class="fields">
             <div class="field">
@@ -157,7 +216,7 @@
 
       <!-- OA 流转记录弹窗 -->
       <div v-if="timelineOf" class="modal-backdrop" @click.self="timelineOf = null">
-        <div class="card modal">
+        <div class="modal">
           <h3>OA 流转记录 · {{ timelineOf.name || timelineOf.jobTitle }}</h3>
           <ol class="timeline">
             <li v-for="(e, i) in timelineOf.oaTimeline" :key="i" class="tl-item">
@@ -177,17 +236,18 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, type Application, type Job, type AuthUser } from '../api'
+import { api, type Application, type Job, type AuthUser, type SiteConfig } from '../api'
 
 const router = useRouter()
 const token = ref(localStorage.getItem('join_session_token') || '')
 const me = ref<AuthUser | null>(null)
 const entered = ref(false)
-const tab = ref('jobs')
+const tab = ref('site')
 const tabs = [
-  { id: 'jobs', label: '职位' },
+  { id: 'site', label: '站点配置' },
+  { id: 'jobs', label: '职位管理' },
   { id: 'apps', label: '投递审核' },
 ]
 const jobs = ref<Job[]>([])
@@ -202,6 +262,14 @@ const jobForm = ref({ title: '', department: '', location: '', type: 'fulltime',
 const jobFormError = ref('')
 
 const timelineOf = ref<Application | null>(null)
+
+// 站点配置
+const siteForm = ref<SiteConfig>({
+  brand: '', heroTitle: '', heroSubtitle: '', announcement: '', tagline: '', contactEmail: '', bgWords: '', updatedAt: '',
+})
+const siteSaving = ref(false)
+const siteMsg = ref('')
+const siteMsgType = ref<'success' | 'error'>('success')
 
 const isJobTab = computed(() => tab.value === 'jobs')
 
@@ -218,11 +286,12 @@ async function loadAll() {
     return
   }
   try {
-    const [m, j, a, s] = await Promise.all([
+    const [m, j, a, s, site] = await Promise.all([
       api.me(t),
       api.adminJobs(t),
       api.adminApplications(t, appFilter.value),
       api.adminStats(t),
+      api.adminSite(t),
     ])
     if (!m?.is_admin) {
       router.replace('/login')
@@ -232,6 +301,7 @@ async function loadAll() {
     jobs.value = j || []
     apps.value = a || []
     stats.value = s || {}
+    if (site) siteForm.value = { ...siteForm.value, ...site }
     entered.value = true
   } catch (e) {
     alert(e instanceof Error ? e.message : '鉴权失败，请重新登录')
@@ -243,6 +313,30 @@ async function logout() {
   localStorage.removeItem('join_session_token')
   try { await api.logout() } catch { /* ignore */ }
   router.replace('/login')
+}
+
+async function saveSite() {
+  siteSaving.value = true
+  siteMsg.value = ''
+  try {
+    const updated = await api.adminUpdateSite(tokenOf(), {
+      brand: siteForm.value.brand,
+      heroTitle: siteForm.value.heroTitle,
+      heroSubtitle: siteForm.value.heroSubtitle,
+      announcement: siteForm.value.announcement,
+      tagline: siteForm.value.tagline,
+      contactEmail: siteForm.value.contactEmail,
+      bgWords: siteForm.value.bgWords,
+    })
+    siteForm.value = { ...siteForm.value, ...updated }
+    siteMsg.value = '已保存并生效'
+    siteMsgType.value = 'success'
+  } catch (e) {
+    siteMsg.value = e instanceof Error ? e.message : '保存失败'
+    siteMsgType.value = 'error'
+  } finally {
+    siteSaving.value = false
+  }
 }
 
 async function loadJobs() {
@@ -343,33 +437,112 @@ function fmt(s: string) {
 }
 
 onMounted(loadAll)
-onUnmounted(() => {
-  tabs
-})
 </script>
 
 <style scoped>
 .page {
+  position: relative;
   min-height: 100vh;
-  background: var(--bg);
+  overflow-x: hidden;
 }
+.bg-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.grid-lines {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(circle at 50% 0%, #000 0%, transparent 70%);
+}
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.5;
+}
+.orb-a {
+  width: 420px;
+  height: 420px;
+  background: #5b8cff;
+  top: -80px;
+  left: -60px;
+  animation: pulseGlow 10s ease-in-out infinite;
+}
+.orb-b {
+  width: 360px;
+  height: 360px;
+  background: #9b5bff;
+  top: 20%;
+  right: -80px;
+  animation: pulseGlow 12s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
 .wrap {
-  max-width: 960px;
+  position: relative;
+  z-index: 1;
+  max-width: 1060px;
   margin: 0 auto;
-  padding: 32px 24px 48px;
+  padding: 40px 24px 60px;
 }
 .head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   flex-wrap: wrap;
+}
+.head-kicker {
+  font-size: 12px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 8px;
 }
 .auth {
   display: flex;
-  gap: 8px;
+  gap: 10px;
   align-items: center;
+}
+.user-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 12px 6px 6px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+}
+.user-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--grad);
+  color: #06101f;
+  display: grid;
+  place-items: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+.user-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+.user-name {
+  font-size: 13px;
+  font-weight: 600;
+}
+.user-email {
+  font-size: 11px;
+  color: var(--ink-soft);
 }
 .actions {
   gap: 8px;
@@ -380,6 +553,47 @@ onUnmounted(() => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* 统计卡 */
+.stats-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+  margin: 12px 0 18px;
+}
+.stat {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.stat b {
+  font-size: 28px;
+  font-weight: 800;
+  background: var(--grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.stat span {
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+
+.site-msg {
+  margin: 12px 0 0;
+  font-size: 13px;
+}
+.site-msg.success {
+  color: var(--ok);
+}
+.site-msg.error {
+  color: var(--danger);
+}
+
 .timeline {
   list-style: none;
   margin: 0;
@@ -402,11 +616,11 @@ onUnmounted(() => {
 }
 .dot-approve,
 .dot-submit {
-  background: #16a34a;
+  background: var(--ok);
 }
 .dot-reject,
 .dot-revoke {
-  background: #dc2626;
+  background: var(--danger);
 }
 .tl-head {
   display: flex;

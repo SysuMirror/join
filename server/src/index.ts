@@ -12,6 +12,7 @@ import { storeBackendLabel } from './storage.js'
 import { jobsRouter } from './routes/jobs.js'
 import { adminRouter } from './routes/admin.js'
 import { authRouter } from './routes/auth.js'
+import { siteRouter } from './routes/site.js'
 
 const app = express()
 
@@ -52,6 +53,7 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/jobs', jobsRouter)
 app.use('/api/admin', adminRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/site', siteRouter)
 
 const dist = config.frontendDist
 if (fs.existsSync(dist)) {

@@ -1,8 +1,15 @@
 <template>
   <div class="page">
+    <div class="bg-scene" aria-hidden="true">
+      <span class="orb orb-a" />
+      <span class="orb orb-b" />
+      <div class="grid-lines" />
+    </div>
+
     <header class="topbar">
       <div class="topbar-inner">
         <RouterLink class="brand" to="/">
+          <span class="logo-mark"><i /></span>
           <span class="brand-mark">软工集市</span>
           <span class="brand-suffix">· 招聘</span>
         </RouterLink>
@@ -10,34 +17,37 @@
     </header>
 
     <main class="container">
-      <div v-if="loading" class="empty">加载中…</div>
+      <div v-if="loading" class="empty"><span class="spinner" />加载中…</div>
       <p v-if="error" class="error">{{ error }}</p>
 
       <template v-if="job">
         <RouterLink class="back" to="/">← 返回职位列表</RouterLink>
-        <div class="card panel job-header">
+
+        <section class="card panel job-header reveal in">
+          <div class="job-badge-glow" />
           <div class="job-head">
             <div>
               <h1 class="job-title">{{ job.title }}</h1>
               <div class="job-meta">
-                <span class="badge" :class="typeClass(job.type)">{{ typeLabel(job.type) }}</span>
+                <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
                 <span>{{ job.department }}</span>
-                <span>·</span>
+                <span class="dot" />
                 <span>{{ job.location || '远程' }}</span>
-                <span v-if="job.headcount">· 招 {{ job.headcount }} 人</span>
+                <span v-if="job.headcount" class="dot" />
+                <span v-if="job.headcount">招 {{ job.headcount }} 人</span>
               </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <div class="layout">
-          <section class="card panel desc">
+          <section class="card panel desc reveal in">
             <h3>职位描述</h3>
             <p class="desc-text">{{ job.summary }}</p>
             <pre class="desc-block">{{ job.description }}</pre>
           </section>
 
-          <aside class="card panel apply">
+          <aside class="card panel apply reveal in">
             <h3>投递此职位</h3>
             <form @submit.prevent="submit">
               <div class="field">
@@ -123,7 +133,7 @@ function typeLabel(t: string) {
   const map: Record<string, string> = { fulltime: '全职', intern: '实习', parttime: '兼职' }
   return map[t] || t
 }
-function typeClass(t: string) {
+function badgeClass(t: string) {
   const map: Record<string, string> = { fulltime: 'badge', intern: 'badge-green', parttime: 'badge-amber' }
   return map[t] || 'badge'
 }
@@ -133,23 +143,81 @@ onMounted(load)
 
 <style scoped>
 .page {
+  position: relative;
   min-height: 100vh;
-  background: var(--bg);
+  overflow-x: hidden;
 }
+.bg-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+.grid-lines {
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+  background-size: 60px 60px;
+  mask-image: radial-gradient(circle at 50% 20%, #000 0%, transparent 70%);
+}
+.orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(60px);
+  opacity: 0.55;
+}
+.orb-a {
+  width: 400px;
+  height: 400px;
+  background: #5b8cff;
+  top: -60px;
+  left: -60px;
+  animation: pulseGlow 10s ease-in-out infinite;
+}
+.orb-b {
+  width: 360px;
+  height: 360px;
+  background: #9b5bff;
+  top: 20%;
+  right: -60px;
+  animation: pulseGlow 12s ease-in-out infinite;
+  animation-delay: 2s;
+}
+
 .topbar {
-  background: #fff;
+  position: relative;
+  z-index: 2;
   border-bottom: 1px solid var(--line);
+  background: rgba(10, 15, 36, 0.5);
+  backdrop-filter: blur(12px);
 }
 .topbar-inner {
-  max-width: 960px;
+  max-width: 1020px;
   margin: 0 auto;
   padding: 14px 24px;
 }
 .brand {
   display: inline-flex;
-  align-items: baseline;
-  gap: 4px;
+  align-items: center;
+  gap: 8px;
   font-weight: 700;
+}
+.logo-mark {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: var(--grad);
+  display: grid;
+  place-items: center;
+}
+.logo-mark i {
+  width: 9px;
+  height: 9px;
+  background: #06101f;
+  border-radius: 3px;
+  transform: rotate(45deg);
 }
 .brand-mark {
   font-size: 18px;
@@ -158,31 +226,48 @@ onMounted(load)
   color: var(--ink-soft);
   font-weight: 500;
 }
+
 .container {
-  max-width: 960px;
+  position: relative;
+  z-index: 1;
+  max-width: 1020px;
   margin: 0 auto;
-  padding: 24px 24px 48px;
+  padding: 30px 24px 60px;
 }
 .back {
   color: var(--ink-soft);
   font-size: 13px;
   display: inline-block;
-  margin-bottom: 16px;
+  margin-bottom: 18px;
+  transition: color 0.2s ease, transform 0.2s ease;
 }
 .back:hover {
   color: var(--accent);
+  transform: translateX(-2px);
 }
 .job-header {
-  margin-bottom: 20px;
+  position: relative;
+  margin-bottom: 22px;
+  overflow: hidden;
+}
+.job-badge-glow {
+  position: absolute;
+  top: -60px;
+  right: -30px;
+  width: 240px;
+  height: 240px;
+  background: var(--grad-soft);
+  border-radius: 50%;
+  filter: blur(40px);
 }
 .job-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
+  position: relative;
 }
 .job-title {
-  margin: 0 0 10px;
-  font-size: 26px;
+  margin: 0 0 12px;
+  font-size: 32px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
 }
 .job-meta {
   display: flex;
@@ -192,29 +277,38 @@ onMounted(load)
   font-size: 14px;
   flex-wrap: wrap;
 }
+.job-meta .dot {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--ink-faint);
+}
+
 .layout {
   display: grid;
-  grid-template-columns: 1fr 360px;
-  gap: 20px;
+  grid-template-columns: 1fr 380px;
+  gap: 22px;
   align-items: start;
 }
 .desc h3 {
   margin-bottom: 12px;
+  font-size: 18px;
 }
 .desc-text {
   font-size: 15px;
-  line-height: 1.7;
+  line-height: 1.8;
 }
 .desc-block {
   white-space: pre-wrap;
   font-family: var(--font);
   font-size: 14px;
-  line-height: 1.8;
-  color: var(--ink);
-  background: var(--bg);
-  padding: 14px;
-  border-radius: 10px;
+  line-height: 1.85;
+  color: var(--ink-soft);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 18px;
+  border-radius: 14px;
   margin: 16px 0 0;
+  border: 1px solid var(--line);
 }
 .apply form {
   display: flex;
@@ -222,11 +316,27 @@ onMounted(load)
   gap: 12px;
 }
 .apply .btn {
-  margin-top: 4px;
+  margin-top: 6px;
 }
+
+.spinner {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  margin-right: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  vertical-align: middle;
+  animation: spinSlow 0.8s linear infinite;
+}
+
 @media (max-width: 720px) {
   .layout {
     grid-template-columns: 1fr;
+  }
+  .job-title {
+    font-size: 26px;
   }
 }
 </style>
