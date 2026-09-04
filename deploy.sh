@@ -21,9 +21,9 @@ export PUBLIC_BASE="${PUBLIC_BASE:-${JOIN_PUBLIC_URL:-https://join.ssemarket.cn}
 echo "[deploy] PORT=$PORT DATA_DIR=$DATA_DIR"
 echo "[deploy] PUBLIC_BASE=$PUBLIC_BASE (join platform)"
 
-# 敏感值（JOIN_DEV_MODULE_PRIVATE_KEY / JOIN_ADMIN_TOKEN 等）一律由部署平台注入，
+# 敏感值（JOIN_DEV_MODULE_PRIVATE_KEY / JOIN_SESSION_SECRET 等）一律由部署平台注入，
 # 不在代码/包内提供默认值，避免密钥落仓库。
-for v in JOIN_DEV_MODULE_SLUG JOIN_DEV_MODULE_PRIVATE_KEY JOIN_ADMIN_TOKEN; do
+for v in JOIN_DEV_MODULE_SLUG JOIN_DEV_MODULE_PRIVATE_KEY JOIN_SESSION_SECRET; do
   if [ -z "${!v:-}" ]; then
     echo "[deploy] FATAL: $v 未注入（请在部署平台环境变量中配置）" >&2
     exit 1
@@ -31,7 +31,7 @@ for v in JOIN_DEV_MODULE_SLUG JOIN_DEV_MODULE_PRIVATE_KEY JOIN_ADMIN_TOKEN; do
 done
 export JOIN_DEV_MODULE_SLUG
 export JOIN_DEV_MODULE_PRIVATE_KEY
-export JOIN_ADMIN_TOKEN
+export JOIN_SESSION_SECRET
 
 # 若包内有 server/.env，补缺（不覆盖已 export / 平台注入的键）
 if [ -f "$ROOT/server/.env" ]; then

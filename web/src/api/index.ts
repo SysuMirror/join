@@ -37,6 +37,17 @@ export interface Application {
   oaTimeline?: { action: string; by?: string; viaModule?: string; note?: string; at: string }[]
 }
 
+export interface AuthUser {
+  id: number
+  email: string
+  name: string
+  is_admin: boolean
+}
+
+function authConfig(token: string): Record<string, unknown> {
+  return { headers: { Authorization: `Bearer ${token}` } }
+}
+
 // ===== 公开（前端投递） =====
 export const api = {
   jobs: () => http.get<Job[]>('api/jobs'),
@@ -45,25 +56,31 @@ export const api = {
     http.post(`api/jobs/${slug}/apply`, body),
   health: () => http.get<any>('api/health'),
 
-  // ===== 管理端（需 x-admin-token） =====
-  adminJobs: (token: string) => http.get<Job[]>('api/admin/jobs', { headers: { 'x-admin-token': token } }),
+  // ===== 认证 =====
+  sendCode: (email: string) => http.post(`api/auth/code`, { email }),
+  login: (email: string, code: string) => http.post<any>('api/auth/login', { email, code }),
+  me: (token: string) => http.get<AuthUser>('api/auth/me', authConfig(token)),
+  logout: () => http.post('api/auth/logout'),
+
+  // ===== 管理端（需登录会话 Bearer token） =====
+  adminJobs: (token: string) => http.get<Job[]>('api/admin/jobs', authConfig(token)),
   adminCreateJob: (token: string, body: Record<string, unknown>) =>
-    http.post('api/admin/jobs', body, { headers: { 'x-admin-token': token } }),
+    http.post('api/admin/jobs', body, authConfig(token)),
   adminUpdateJob: (token: string, id: number, body: Record<string, unknown>) =>
-    http.put(`api/admin/jobs/${id}`, body, { headers: { 'x-admin-token': token } }),
+    http.put(`api/admin/jobs/${id}`, body, authConfig(token)),
   adminDeleteJob: (token: string, id: number) =>
-    http.delete(`api/admin/jobs/${id}`, { headers: { 'x-admin-token': token } }),
+    http.delete(`api/admin/jobs/${id}`, authConfig(token)),
   adminApplications: (token: string, status = '') =>
     http.get<Application[]>(
       `api/admin/applications${status ? `?status=${encodeURIComponent(status)}` : ''}`,
-      { headers: { 'x-admin-token': token } },
+      authConfig(token),
     ),
   adminPassApplication: (token: string, id: number) =>
-    http.post(`api/admin/applications/${id}/pass`, {}, { headers: { 'x-admin-token': token }, timeout: 20_000 }),
+    http.post(`api/admin/applications/${id}/pass`, {}, { ...authConfig(token), timeout: 20_000 }),
   adminRejectApplication: (token: string, id: number, note = '') =>
-    http.post(`api/admin/applications/${id}/reject`, { note }, { headers: { 'x-admin-token': token } }),
+    http.post(`api/admin/applications/${id}/reject`, { note }, authConfig(token)),
   adminRefreshOa: (token: string) =>
-    http.post(`api/admin/applications/refresh-oa`, {}, { headers: { 'x-admin-token': token }, timeout: 30_000 }),
+    http.post(`api/admin/applications/refresh-oa`, {}, { ...authConfig(token), timeout: 30_000 }),
   adminStats: (token: string) =>
-    http.get<any>('api/admin/stats', { headers: { 'x-admin-token': token } }),
+    http.get<any>('api/admin/stats', authConfig(token)),
 }

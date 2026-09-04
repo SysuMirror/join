@@ -4,7 +4,10 @@
       <div class="hero-inner">
         <div class="brand-row">
           <span class="brand-mark">软工集市</span>
-          <a class="brand-link" href="https://ssemarket.cn" target="_blank">ssemarket.cn ↗</a>
+          <div class="brand-links">
+            <a class="brand-link" href="https://ssemarket.cn" target="_blank">ssemarket.cn ↗</a>
+            <RouterLink class="brand-link" to="/login">管理入口</RouterLink>
+          </div>
         </div>
         <h1 class="hero-title">加入软工集市</h1>
         <p class="hero-sub">

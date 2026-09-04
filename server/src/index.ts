@@ -6,11 +6,12 @@ import express from 'express'
 import cors from 'cors'
 import fs from 'node:fs'
 import path from 'node:path'
-import { config, isDevPlatformConfigured, isAdminConfigured } from './config.js'
+import { config, isDevPlatformConfigured, isMailLoginUsable } from './config.js'
 import { initDb, db, now, type JobRow } from './db.js'
 import { storeBackendLabel } from './storage.js'
 import { jobsRouter } from './routes/jobs.js'
 import { adminRouter } from './routes/admin.js'
+import { authRouter } from './routes/auth.js'
 
 const app = express()
 
@@ -42,7 +43,7 @@ app.get('/api/health', (_req, res) => {
     data: {
       service: 'join-platform',
       devPlatformConfigured: isDevPlatformConfigured(),
-      adminConfigured: isAdminConfigured(),
+      mailLoginUsable: isMailLoginUsable(),
       time: new Date().toISOString(),
     },
   })
@@ -50,6 +51,7 @@ app.get('/api/health', (_req, res) => {
 
 app.use('/api/jobs', jobsRouter)
 app.use('/api/admin', adminRouter)
+app.use('/api/auth', authRouter)
 
 const dist = config.frontendDist
 if (fs.existsSync(dist)) {
@@ -71,7 +73,7 @@ await initDb()
 const missingEnv: string[] = []
 if (!config.devPlatform.moduleSlug) missingEnv.push('JOIN_DEV_MODULE_SLUG')
 if (!config.devPlatform.modulePrivateKey) missingEnv.push('JOIN_DEV_MODULE_PRIVATE_KEY')
-if (!config.adminToken) missingEnv.push('JOIN_ADMIN_TOKEN')
+if (config.mail.enabled && !config.sessionSecret) missingEnv.push('JOIN_SESSION_SECRET')
 if (missingEnv.length) {
   console.error(
     `[join] FATAL: 缺少必填环境变量：${missingEnv.join(', ')}（由部署平台注入，不落包）`,

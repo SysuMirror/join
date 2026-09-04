@@ -53,19 +53,50 @@ export type ApplicationRow = {
   updated_at: string
 }
 
+/** 邮箱登录用户 */
+export type UserRow = {
+  id: number
+  /** 登录邮箱（唯一） */
+  email: string
+  /** 展示名（默认取邮箱 @ 前缀） */
+  name: string
+  /** 是否具备管理权限（审核入口） */
+  is_admin: number
+  /** 最后登录时间 */
+  last_login_at: string
+  created_at: string
+}
+
+/** 邮箱验证码（用于登录；明文存于 JSON 仅为本平台简化场景，生产建议上 Redis） */
+export type VerifyCodeRow = {
+  id: number
+  email: string
+  /** 验证码（6 位数字） */
+  code: string
+  /** 过期时间 ISO */
+  expires_at: string
+  /** 是否已使用 */
+  used: number
+  created_at: string
+}
+
 type Store = {
   seq: Record<string, number>
   jobs: JobRow[]
   applications: ApplicationRow[]
+  users: UserRow[]
+  verify_codes: VerifyCodeRow[]
 }
 
-const SEQ_KEYS = ['jobs', 'applications'] as const
+const SEQ_KEYS = ['jobs', 'applications', 'users', 'verify_codes'] as const
 
 function emptyStore(): Store {
   return {
-    seq: { jobs: 0, applications: 0 },
+    seq: { jobs: 0, applications: 0, users: 0, verify_codes: 0 },
     jobs: [],
     applications: [],
+    users: [],
+    verify_codes: [],
   }
 }
 
@@ -80,6 +111,8 @@ function migrate(s: Store): void {
   }
   if (!s.jobs) s.jobs = []
   if (!s.applications) s.applications = []
+  if (!s.users) s.users = []
+  if (!s.verify_codes) s.verify_codes = []
   for (const j of s.jobs) {
     if (j.slug == null) j.slug = ''
     if (j.department == null) j.department = ''
@@ -103,6 +136,15 @@ function migrate(s: Store): void {
     if (a.oa_checked_at == null) a.oa_checked_at = ''
     if (a.oa_timeline == null) a.oa_timeline = ''
     if (a.reviewer == null) a.reviewer = ''
+  }
+  for (const u of s.users) {
+    if (u.name == null) u.name = u.email?.split('@')[0] || ''
+    if (u.is_admin == null) u.is_admin = 0
+    if (u.last_login_at == null) u.last_login_at = ''
+  }
+  for (const c of s.verify_codes) {
+    if (c.expires_at == null) c.expires_at = ''
+    if (c.used == null) c.used = 0
   }
 }
 

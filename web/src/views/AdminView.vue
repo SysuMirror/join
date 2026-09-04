@@ -7,8 +7,8 @@
           <p class="page-sub">管理职位、审核投递，初审通过后自动推送到开发者平台 OA 审批。</p>
         </div>
         <div class="auth">
-          <input v-model="token" class="search" type="password" placeholder="管理口令" />
-          <button class="btn btn-primary" @click="loadAll">进入</button>
+          <span class="muted small" v-if="me">{{ me.name }}（{{ me.email }}）</span>
+          <button class="btn btn-ghost" @click="logout">退出登录</button>
         </div>
       </header>
 
@@ -100,7 +100,7 @@
         </section>
       </div>
 
-      <div v-else class="card panel empty">请输入管理口令后进入。</div>
+      <div v-else class="card panel empty">正在校验登录…</div>
 
       <!-- 职位编辑弹窗 -->
       <div v-if="jobFormOpen" class="modal-backdrop" @click.self="jobFormOpen = false">
@@ -177,10 +177,13 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { api, type Application, type Job } from '../api'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { api, type Application, type Job, type AuthUser } from '../api'
 
-const token = ref(localStorage.getItem('join_admin_token') || '')
+const router = useRouter()
+const token = ref(localStorage.getItem('join_session_token') || '')
+const me = ref<AuthUser | null>(null)
 const entered = ref(false)
 const tab = ref('jobs')
 const tabs = [
@@ -204,26 +207,42 @@ const isJobTab = computed(() => tab.value === 'jobs')
 
 function tokenOf() {
   const t = token.value.trim()
-  localStorage.setItem('join_admin_token', t)
+  localStorage.setItem('join_session_token', t)
   return t
 }
 
 async function loadAll() {
   const t = tokenOf()
-  if (!t) { entered.value = true; return }
+  if (!t) {
+    router.replace('/login')
+    return
+  }
   try {
-    const [j, a, s] = await Promise.all([
+    const [m, j, a, s] = await Promise.all([
+      api.me(t),
       api.adminJobs(t),
       api.adminApplications(t, appFilter.value),
       api.adminStats(t),
     ])
+    if (!m?.is_admin) {
+      router.replace('/login')
+      return
+    }
+    me.value = m
     jobs.value = j || []
     apps.value = a || []
     stats.value = s || {}
     entered.value = true
   } catch (e) {
-    alert(e instanceof Error ? e.message : '鉴权失败，请检查口令')
+    alert(e instanceof Error ? e.message : '鉴权失败，请重新登录')
+    router.replace('/login')
   }
+}
+
+async function logout() {
+  localStorage.removeItem('join_session_token')
+  try { await api.logout() } catch { /* ignore */ }
+  router.replace('/login')
 }
 
 async function loadJobs() {
@@ -324,6 +343,9 @@ function fmt(s: string) {
 }
 
 onMounted(loadAll)
+onUnmounted(() => {
+  tabs
+})
 </script>
 
 <style scoped>
