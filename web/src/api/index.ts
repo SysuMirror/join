@@ -52,6 +52,7 @@ export interface SiteConfig {
   tagline: string
   contactEmail: string
   bgWords: string
+  adminEmails?: string
   updatedAt: string
 }
 
@@ -69,10 +70,8 @@ export const api = {
   health: () => http.get<any>('api/health'),
 
   // ===== 认证 =====
-  sendCode: (email: string, purpose: 'login' | 'register' = 'login') =>
-    http.post(`api/auth/code`, { email, purpose }),
+  sendCode: (email: string) => http.post(`api/auth/code`, { email }),
   login: (email: string, code: string) => http.post<any>('api/auth/login', { email, code }),
-  register: (email: string, code: string, name: string) => http.post<any>('api/auth/register', { email, code, name }),
   me: (token: string) => http.get<AuthUser>('api/auth/me', authConfig(token)),
   logout: () => http.post('api/auth/logout'),
 

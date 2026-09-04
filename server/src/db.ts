@@ -96,6 +96,8 @@ export type SiteConfigRow = {
   contactEmail: string
   /** 背景文案装饰（可空，用于展示更灵动） */
   bgWords: string
+  /** 管理员登记邮箱（逗号分隔；有此邮箱即可登录后台，后台可增删） */
+  adminEmails: string
   updated_at: string
 }
 
@@ -119,6 +121,7 @@ function defaultSiteConfig(): SiteConfigRow {
     tagline: '让每个热爱技术的人，都能找到属于他的舞台',
     contactEmail: 'hr@ssemarket.cn',
     bgWords: '技术 · 创造 · 热爱 · 成长',
+    adminEmails: '',
     updated_at: nowIso(),
   }
 }
@@ -184,7 +187,7 @@ function migrate(s: Store): void {
   const def = defaultSiteConfig()
   if (!s.site_config) s.site_config = def
   const sc = s.site_config
-  for (const k of ['brand', 'heroTitle', 'heroSubtitle', 'announcement', 'tagline', 'contactEmail', 'bgWords'] as const) {
+  for (const k of ['brand', 'heroTitle', 'heroSubtitle', 'announcement', 'tagline', 'contactEmail', 'bgWords', 'adminEmails'] as const) {
     if (sc[k] == null) sc[k] = def[k]
   }
   if (sc.updated_at == null) sc.updated_at = nowIso()

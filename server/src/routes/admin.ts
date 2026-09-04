@@ -248,6 +248,7 @@ const SITE_FIELDS = [
   'tagline',
   'contactEmail',
   'bgWords',
+  'adminEmails',
 ] as const
 
 adminRouter.put('/site', requireAdminToken, async (req, res) => {
@@ -261,6 +262,21 @@ adminRouter.put('/site', requireAdminToken, async (req, res) => {
     if (key === 'contactEmail' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
       fail(res, 400, '联系邮箱格式不正确')
       return
+    }
+    if (key === 'adminEmails') {
+      // 管理员登记邮箱：逗号分隔，逐条校验邮箱格式
+      const list = val
+        .split(',')
+        .map((e) => e.trim())
+        .filter(Boolean)
+      for (const e of list) {
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) {
+          fail(res, 400, `管理员邮箱格式不正确：${e}`)
+          return
+        }
+      }
+      sc[key] = list.join(',')
+      continue
     }
     sc[key] = val
   }

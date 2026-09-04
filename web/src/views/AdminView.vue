@@ -7,6 +7,7 @@
           <p class="page-sub">管理职位、调配站点文案、审核投递，初审通过后自动推送到开发者平台 OA 审批。</p>
         </div>
         <div class="auth" v-if="me">
+          <RouterLink class="btn btn-ghost btn-sm" to="/">← 返回主页</RouterLink>
           <div class="user-chip">
             <span class="user-avatar">{{ (me.name || me.email)[0]?.toUpperCase() }}</span>
             <span class="user-meta">
@@ -43,6 +44,11 @@
             <div class="field">
               <label>联系邮箱</label>
               <input v-model="siteForm.contactEmail" maxlength="120" />
+            </div>
+            <div class="field full">
+              <label>管理员邮箱（逗号分隔，登记后可登录后台）</label>
+              <input v-model="siteForm.adminEmails" placeholder="如：admin@ssemarket.cn,xxx@qq.com" />
+              <span class="hint">保存后即时生效；只有在此登记的邮箱才能用验证码登录管理后台。</span>
             </div>
             <div class="field full">
               <label>首页主标题（Hero）</label>
@@ -256,7 +262,7 @@ const timelineOf = ref<Application | null>(null)
 
 // 站点配置
 const siteForm = ref<SiteConfig>({
-  brand: '', heroTitle: '', heroSubtitle: '', announcement: '', tagline: '', contactEmail: '', bgWords: '', updatedAt: '',
+  brand: '', heroTitle: '', heroSubtitle: '', announcement: '', tagline: '', contactEmail: '', bgWords: '', adminEmails: '', updatedAt: '',
 })
 const siteSaving = ref(false)
 const siteMsg = ref('')
@@ -318,6 +324,7 @@ async function saveSite() {
       tagline: siteForm.value.tagline,
       contactEmail: siteForm.value.contactEmail,
       bgWords: siteForm.value.bgWords,
+      adminEmails: siteForm.value.adminEmails,
     })
     siteForm.value = { ...siteForm.value, ...updated }
     siteMsg.value = '已保存并生效'
