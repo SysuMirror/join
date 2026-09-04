@@ -1,0 +1,14 @@
+node_modules/
+dist/
+data/
+*.db
+.env
+server/.env
+web/.env
+web/dist/
+.DS_Store
+*.log
+.npm-cache/
+.npm/
+deploy/oauth.env
+.pack-sseinfra-stage/
