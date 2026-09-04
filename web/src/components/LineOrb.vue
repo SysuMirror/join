@@ -8,10 +8,10 @@
  * 一团大圆上的极细弧线，围绕圆心缓慢旋转、各自相位呼吸，
  * 视觉上形成莫尔条纹般的流动感。纯黑白灰，无填充。
  *
- * 实现要点：
- * - 每条线是「以圆心为中心的椭圆弧」：宽度/高度/相位略不同 → 旋转时错落
- * - 全部 stroke 黑色低透明度，叠加处自然加深出「体积感」
- * - devicePixelRatio 适配，requestAnimationFrame 驱动
+ * 本次增强：
+ * - 所有插值用 smoothstep 缓动，过渡更圆滑（无硬切）。
+ * - 圆心处用品牌蓝「一行一行」地绘制简笔 logo（六边形外框 + 双层 S 折线），
+ *   随扫描线自上而下渐次显现，与圆环入场错开。
  */
 import { onMounted, onUnmounted, ref } from 'vue'
 
@@ -25,16 +25,20 @@ const props = withDefaults(
     alpha?: number
     /** 旋转速度（弧度/秒） */
     speed?: number
+    /** 是否在圆心绘制简笔 logo */
+    showLogo?: boolean
+    /** 简笔 logo 线条颜色 */
+    logoColor?: string
   }>(),
-  { size: 420, lines: 64, alpha: 0.16, speed: 0.12 },
+  { size: 420, lines: 72, alpha: 0.15, speed: 0.1, showLogo: true, logoColor: '#3370ff' },
 )
 
 const cv = ref<HTMLCanvasElement | null>(null)
 let raf = 0
 let running = true
-/** 入场生长进度 0→1（约 2.2s），线条由内向外依次展开 */
+/** 入场生长进度 0→1（约 2.6s），线条由内向外依次展开 */
 let intro = 0
-const INTRO_DURATION = 2200
+const INTRO_DURATION = 2600
 
 // 每条线的独立参数（生成一次，避免每帧随机抖动）
 type Lane = {
@@ -57,9 +61,8 @@ function makeLanes(n: number): Lane[] {
   for (let i = 0; i < n; i++) {
     const t = i / (n - 1)
     lanes.push({
-      // 半径从 0.55R 到 1R 均匀铺开，加一点扰动让层次更自然
-      rx: 0.55 + 0.45 * t + (Math.random() - 0.5) * 0.02,
-      ry: 0.55 + 0.45 * t + (Math.random() - 0.5) * 0.02,
+      rx: 0.55 + 0.45 * t + (Math.random() - 0.5) * 0.015,
+      ry: 0.55 + 0.45 * t + (Math.random() - 0.5) * 0.015,
       phase: (t * Math.PI) / 2 + Math.random() * 0.2,
       breathe: 0.015 + Math.random() * 0.02,
       a: 0.6 + Math.random() * 0.4,
@@ -68,6 +71,43 @@ function makeLanes(n: number): Lane[] {
   }
   return lanes
 }
+
+/** smoothstep：0→1，两端圆滑，用于一切过渡插值 */
+function smooth(t: number): number {
+  const x = Math.max(0, Math.min(1, t))
+  return x * x * (3 - 2 * x)
+}
+
+/** 简笔 logo：六边形外框 + 双层 S 折线（归一化坐标，y 向下为正） */
+const LOGO_LINES: [number, number][][] = [
+  // 六边形外框（闭合，尖顶朝上）
+  [
+    [-0.866, -0.5],
+    [0, -1],
+    [0.866, -0.5],
+    [0.866, 0.5],
+    [0, 1],
+    [-0.866, 0.5],
+    [-0.866, -0.5],
+  ],
+  // S 折线（外层）
+  [
+    [-0.5, -0.6],
+    [0.5, -0.6],
+    [0.5, -0.1],
+    [-0.5, -0.1],
+    [-0.5, 0.45],
+    [0.36, 0.45],
+  ],
+  // S 折线（内层）
+  [
+    [-0.32, -0.42],
+    [0.32, -0.42],
+    [0.32, -0.22],
+    [-0.32, -0.22],
+    [-0.32, 0.32],
+  ],
+]
 
 let lanes: Lane[] = []
 let startTime = 0
@@ -92,7 +132,7 @@ function draw(time: number) {
   const R = cssSize * 0.46
   const t = time / 1000
 
-  // 入场生长：easeOutCubic，从 0 到 1
+  // 入场生长：easeOutCubic
   if (intro < 1) {
     intro = Math.min(1, (time - startTime) / INTRO_DURATION)
     intro = 1 - Math.pow(1 - intro, 3)
@@ -103,12 +143,12 @@ function draw(time: number) {
 
   for (const lane of lanes) {
     const wob = Math.sin(t * 0.6 + lane.phase) * lane.breathe
-    // 每条线按自身半径错峰出现：内侧先展开，外侧后展开
-    const laneStart = (lane.rx - 0.55) / 0.45 // 0~1
-    const laneProgress = Math.max(0, Math.min(1, (intro - laneStart * 0.5) / 0.5))
+    // 每条线按自身半径错峰出现：内侧先展开，外侧后展开（smoothstep 圆滑过渡）
+    const laneStart = (lane.rx - 0.55) / 0.45
+    const laneProgress = smooth((intro - laneStart * 0.5) / 0.5)
     if (laneProgress <= 0) continue
 
-    const grow = 0.55 + 0.45 * laneProgress // 弧线从 55% 大小生长到 100%
+    const grow = 0.55 + 0.45 * laneProgress
     const rx = lane.rx * R * grow * (1 + wob)
     const ry = lane.ry * R * grow * (1 - wob)
     const rot = t * props.speed + lane.phase * 0.35
@@ -120,6 +160,51 @@ function draw(time: number) {
     ctx.stroke()
   }
   ctx.globalAlpha = 1
+
+  // 简笔 logo：在 intro 后半段开始「一行一行」自上而下显现
+  if (props.showLogo) {
+    const logoProgress = smooth((intro - 0.5) / 0.5)
+    if (logoProgress > 0) {
+      drawLogo(ctx, cx, cy, R * 0.42, logoProgress, cssSize)
+    }
+  }
+}
+
+/** 逐行绘制简笔 logo：用 clip 从顶向下扩展，形成扫描式「一行行画」效果 */
+function drawLogo(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  u: number,
+  p: number,
+  cssSize: number,
+) {
+  const top = cy - u * 2
+  const bottom = cy + u * 2
+  const scanY = top + (bottom - top) * p
+
+  ctx.save()
+  ctx.beginPath()
+  ctx.rect(0, 0, cssSize, scanY)
+  ctx.clip()
+
+  ctx.strokeStyle = props.logoColor
+  ctx.lineWidth = Math.max(u * 0.08, 1.5)
+  ctx.lineJoin = 'round'
+  ctx.globalAlpha = smooth(p) // 随扫描增强
+
+  for (const line of LOGO_LINES) {
+    ctx.beginPath()
+    for (let i = 0; i < line.length; i++) {
+      const x = cx + line[i][0] * u
+      const y = cy + line[i][1] * u
+      if (i === 0) ctx.moveTo(x, y)
+      else ctx.lineTo(x, y)
+    }
+    ctx.stroke()
+  }
+  ctx.restore()
+  ctx.globalAlpha = 1
 }
 
 function loop(time: number) {
@@ -130,7 +215,6 @@ function loop(time: number) {
 }
 
 function onVisibility() {
-  // 页面隐藏时暂停，回来时恢复（省电）
   if (document.hidden) {
     running = false
     cancelAnimationFrame(raf)
