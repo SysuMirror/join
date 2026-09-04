@@ -51,7 +51,7 @@ function isAdminEmail(email: string): boolean {
   return list.includes(email.toLowerCase())
 }
 
-// ===== 发送验证码 =====
+// ===== 发送验证码（purpose: login | register） =====
 authRouter.post('/code', async (req, res) => {
   if (!config.mail.enabled) {
     fail(res, 400, '邮箱登录未启用')
@@ -62,6 +62,7 @@ authRouter.post('/code', async (req, res) => {
     return
   }
   const email = String(req.body?.email || '').trim().toLowerCase()
+  const purpose = String(req.body?.purpose || 'login') === 'register' ? 'register' : 'login'
   if (!EMAIL_RE.test(email)) {
     fail(res, 400, '邮箱格式不正确')
     return
@@ -71,8 +72,20 @@ authRouter.post('/code', async (req, res) => {
     return
   }
 
-  // 频率限制：interval 内仅允许一次
   const s = db.getStore()
+
+  // 按目的预检账号状态，给用户明确提示
+  const exists = s.users.some((u) => u.email === email)
+  if (purpose === 'register' && exists) {
+    fail(res, 409, '该邮箱已注册，请直接登录')
+    return
+  }
+  if (purpose === 'login' && !exists) {
+    fail(res, 404, '该邮箱未注册，请先注册')
+    return
+  }
+
+  // 频率限制：interval 内仅允许一次
   const last = s.verify_codes
     .filter((c) => c.email === email)
     .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
@@ -115,6 +128,14 @@ authRouter.post('/login', async (req, res) => {
   }
 
   const s = db.getStore()
+
+  // 登录仅限已注册用户
+  let user = s.users.find((u) => u.email === email)
+  if (!user) {
+    fail(res, 404, '该邮箱未注册，请先注册')
+    return
+  }
+
   // 取该邮箱最新一条未使用、未过期的验证码
   const target = s.verify_codes
     .filter((c) => c.email === email && !c.used && Date.parse(c.expires_at) > Date.now())
@@ -125,28 +146,66 @@ authRouter.post('/login', async (req, res) => {
   }
   target.used = 1
 
-  // 建/取用户
-  let user = s.users.find((u) => u.email === email)
-  const t = now()
-  if (!user) {
-    user = {
-      id: db.nextId('users'),
-      email,
-      name: email.split('@')[0],
-      is_admin: isAdminEmail(email) ? 1 : 0,
-      last_login_at: t,
-      created_at: t,
-    }
-    s.users.push(user)
-  } else {
-    user.last_login_at = t
-    // 管理白名单随时可生效（无需重新注册）
-    if (isAdminEmail(email)) user.is_admin = 1
-  }
+  user.last_login_at = now()
+  // 管理白名单随时可生效（无需重新注册）
+  if (isAdminEmail(email)) user.is_admin = 1
   await db.persist()
 
   const token = createSessionToken({ uid: user.id, email: user.email })
   ok(res, { token, user: mapUser(user) }, '登录成功')
+})
+
+// ===== 验证码注册 =====
+authRouter.post('/register', async (req, res) => {
+  if (!config.mail.enabled) {
+    fail(res, 400, '邮箱注册未启用')
+    return
+  }
+  const email = String(req.body?.email || '').trim().toLowerCase()
+  const code = String(req.body?.code || '').trim()
+  const name = String(req.body?.name || '').trim()
+  if (!EMAIL_RE.test(email)) {
+    fail(res, 400, '邮箱格式不正确')
+    return
+  }
+  if (!/^\d{6}$/.test(code)) {
+    fail(res, 400, '验证码格式不正确')
+    return
+  }
+  if (!name || name.length > 32) {
+    fail(res, 400, '请填写昵称（1-32 字）')
+    return
+  }
+
+  const s = db.getStore()
+  if (s.users.some((u) => u.email === email)) {
+    fail(res, 409, '该邮箱已注册，请直接登录')
+    return
+  }
+
+  const target = s.verify_codes
+    .filter((c) => c.email === email && !c.used && Date.parse(c.expires_at) > Date.now())
+    .sort((a, b) => (a.created_at < b.created_at ? 1 : -1))[0]
+  if (!target || target.code !== code) {
+    fail(res, 401, '验证码错误或已过期')
+    return
+  }
+  target.used = 1
+
+  const t = now()
+  const user: UserRow = {
+    id: db.nextId('users'),
+    email,
+    name,
+    is_admin: isAdminEmail(email) ? 1 : 0,
+    last_login_at: t,
+    created_at: t,
+  }
+  s.users.push(user)
+  await db.persist()
+
+  const token = createSessionToken({ uid: user.id, email: user.email })
+  ok(res, { token, user: mapUser(user) }, '注册成功')
 })
 
 // ===== 当前用户 =====

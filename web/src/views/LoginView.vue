@@ -7,14 +7,31 @@
     <div class="auth-wrap">
       <RouterLink class="back-home" to="/">← 返回职位列表</RouterLink>
 
-      <div class="auth-card reveal in">
+      <div class="auth-card">
         <div class="auth-head">
           <img class="logo-img" src="/logo.png" alt="logo" />
-          <h1 class="auth-title">登录</h1>
-          <p class="auth-sub">用你的邮箱登录，管理招聘职位与投递审核。</p>
+          <h1 class="auth-title">{{ mode === 'login' ? '登录' : '注册' }}</h1>
+          <p class="auth-sub">
+            {{ mode === 'login' ? '用你的邮箱登录，管理招聘职位与投递审核。' : '创建账号，投递简历并跟踪进度。' }}
+          </p>
         </div>
 
-        <form @submit.prevent="onLogin">
+        <!-- 登录 / 注册 切换 -->
+        <div class="mode-tabs">
+          <button class="mode-tab" :class="{ active: mode === 'login' }" type="button" @click="switchMode('login')">
+            登录
+          </button>
+          <button class="mode-tab" :class="{ active: mode === 'register' }" type="button" @click="switchMode('register')">
+            注册
+          </button>
+        </div>
+
+        <form @submit.prevent="onSubmit">
+          <div v-if="mode === 'register'" class="field">
+            <label>昵称</label>
+            <input v-model="name" type="text" placeholder="怎么称呼你" required maxlength="32" autocomplete="nickname" />
+          </div>
+
           <div class="field">
             <label>邮箱</label>
             <input v-model="email" type="email" placeholder="you@example.com" required autocomplete="email" />
@@ -30,10 +47,11 @@
             </div>
           </div>
 
+          <p v-if="notice" class="success">{{ notice }}</p>
           <p v-if="error" class="error">{{ error }}</p>
 
           <button class="btn btn-primary btn-block" type="submit" :disabled="busy || sending">
-            {{ busy ? '登录中…' : '登录' }}
+            {{ busy ? (mode === 'login' ? '登录中…' : '注册中…') : mode === 'login' ? '登录' : '创建账号' }}
           </button>
         </form>
 
@@ -56,14 +74,23 @@ import { useRouter } from 'vue-router'
 import { api } from '../api'
 
 const router = useRouter()
+const mode = ref<'login' | 'register'>('login')
 const email = ref(localStorage.getItem('join_login_email') || '')
+const name = ref('')
 const code = ref('')
 const error = ref('')
+const notice = ref('')
 const sending = ref(false)
 const busy = ref(false)
 const countdown = ref(0)
 const ssoEnabled = ref(false)
 let timer: number | undefined
+
+function switchMode(m: 'login' | 'register') {
+  mode.value = m
+  error.value = ''
+  notice.value = ''
+}
 
 let auto = false
 async function attemptAutoLogin() {
@@ -87,6 +114,7 @@ async function attemptAutoLogin() {
 
 async function sendCode() {
   error.value = ''
+  notice.value = ''
   const e = email.value.trim()
   if (!e) {
     error.value = '请先输入邮箱'
@@ -94,9 +122,9 @@ async function sendCode() {
   }
   sending.value = true
   try {
-    await api.sendCode(e)
+    await api.sendCode(e, mode.value)
     localStorage.setItem('join_login_email', e)
-    error.value = '验证码已发送（若未收到，请检查 SMTP 是否配置）'
+    notice.value = '验证码已发送，请查收邮箱'
     startCountdown()
   } catch (e) {
     error.value = e instanceof Error ? e.message : '发送失败'
@@ -114,23 +142,29 @@ function startCountdown() {
   }, 1000)
 }
 
-async function onLogin() {
+async function onSubmit() {
   error.value = ''
+  notice.value = ''
   const e = email.value.trim()
   const c = code.value.trim()
   if (!e || !/^\d{6}$/.test(c)) {
     error.value = '请输入邮箱与 6 位验证码'
     return
   }
+  if (mode.value === 'register' && !name.value.trim()) {
+    error.value = '请填写昵称'
+    return
+  }
   busy.value = true
   try {
-    const r = await api.login(e, c)
+    const r =
+      mode.value === 'login' ? await api.login(e, c) : await api.register(e, c, name.value.trim())
     localStorage.setItem('join_session_token', r.token)
     localStorage.setItem('join_login_email', e)
     if (r.user?.is_admin) router.replace('/admin')
     else router.replace('/')
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '登录失败'
+    error.value = e instanceof Error ? e.message : mode.value === 'login' ? '登录失败' : '注册失败'
   } finally {
     busy.value = false
   }
@@ -197,7 +231,7 @@ onUnmounted(() => {
   animation: fadeUp 0.5s var(--ease);
 }
 .auth-head {
-  margin-bottom: 26px;
+  margin-bottom: 20px;
 }
 .logo-img {
   width: 44px;
@@ -217,6 +251,33 @@ onUnmounted(() => {
   color: var(--ink-soft);
   font-size: 14px;
   line-height: 1.6;
+}
+
+/* 登录 / 注册切换 */
+.mode-tabs {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--input-bg);
+  border-radius: 10px;
+  margin-bottom: 18px;
+}
+.mode-tab {
+  flex: 1;
+  border: none;
+  background: transparent;
+  border-radius: 8px;
+  padding: 8px 0;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-soft);
+  transition: background 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+.mode-tab.active {
+  background: #fff;
+  color: var(--ink);
+  font-weight: 600;
+  box-shadow: var(--shadow);
 }
 
 form {
