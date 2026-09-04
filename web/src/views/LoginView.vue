@@ -2,7 +2,6 @@
   <div class="page">
     <div class="scene" aria-hidden="true">
       <div class="grid" />
-      <div class="beam" />
     </div>
 
     <div class="auth-wrap">
@@ -10,7 +9,7 @@
 
       <div class="auth-card reveal in">
         <div class="auth-head">
-          <span class="logo-mark"><i /></span>
+          <img class="logo-img" src="/logo.png" alt="logo" />
           <h1 class="auth-title">登录</h1>
           <p class="auth-sub">用你的邮箱登录，管理招聘职位与投递审核。</p>
         </div>
@@ -172,28 +171,6 @@ onUnmounted(() => {
   background-size: 72px 72px;
   mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 10%, transparent 75%);
 }
-.beam {
-  position: absolute;
-  top: 0;
-  left: 20%;
-  width: 1px;
-  height: 40%;
-  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.4), transparent);
-  transform: rotate(22deg);
-  transform-origin: top center;
-  animation: beamDrift 10s ease-in-out infinite;
-}
-@keyframes beamDrift {
-  0%,
-  100% {
-    opacity: 0.4;
-    transform: rotate(22deg) translateX(0);
-  }
-  50% {
-    opacity: 0.85;
-    transform: rotate(22deg) translateX(18px);
-  }
-}
 
 .auth-wrap {
   position: relative;
@@ -222,21 +199,12 @@ onUnmounted(() => {
 .auth-head {
   margin-bottom: 26px;
 }
-.logo-mark {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  background: var(--brand);
-  display: grid;
-  place-items: center;
+.logo-img {
+  width: 44px;
+  height: 44px;
+  object-fit: contain;
+  display: block;
   margin-bottom: 18px;
-}
-.logo-mark i {
-  width: 13px;
-  height: 13px;
-  background: #fff;
-  border-radius: 4px;
-  transform: rotate(45deg);
 }
 .auth-title {
   margin: 0 0 8px;

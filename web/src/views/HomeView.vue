@@ -1,15 +1,14 @@
 <template>
   <div class="page">
-    <!-- 细线背景：网格 + 流动光线，克制点缀 -->
+    <!-- 极淡网格背景，仅此一处装饰 -->
     <div class="scene" aria-hidden="true">
       <div class="grid" />
-      <div class="beam" />
     </div>
 
     <header class="hero">
       <nav class="nav">
         <div class="nav-brand">
-          <span class="logo-mark"><i /></span>
+          <img class="logo-img" src="/logo.png" alt="logo" />
           <span class="brand-name">{{ site?.brand || '软工集市' }}</span>
         </div>
         <div class="nav-links">
@@ -18,22 +17,24 @@
         </div>
       </nav>
 
-      <div class="hero-inner reveal in">
-        <div class="hero-eyebrow">
-          <span class="eyebrow-line" />
-          <span>{{ site?.tagline || '让每个热爱技术的人，都能找到属于他的舞台' }}</span>
+      <div class="hero-inner">
+        <!-- 左：文案 -->
+        <div class="hero-copy reveal in">
+          <div class="hero-eyebrow">
+            <span class="eyebrow-line" />
+            <span>{{ site?.tagline || '让每个热爱技术的人，都能找到属于他的舞台' }}</span>
+          </div>
+          <h1 class="hero-title">{{ heroTitleMain }}<span class="hero-title-accent">{{ heroTitleRest }}</span></h1>
+          <p class="hero-sub">{{ heroLines.join(' ') }}</p>
+          <div class="hero-actions">
+            <a href="#jobs" class="btn btn-primary btn-lg">查看职位 <span class="arrow">→</span></a>
+            <a href="https://ssemarket.cn" target="_blank" class="btn btn-ghost btn-lg">了解我们</a>
+          </div>
         </div>
-        <h1 class="hero-title">{{ heroTitleMain }}<span class="hero-title-accent">{{ heroTitleRest }}</span></h1>
-        <p class="hero-sub">{{ heroLines.join(' ') }}</p>
-        <div class="hero-actions">
-          <a href="#jobs" class="btn btn-primary btn-lg">查看职位 <span class="arrow">→</span></a>
-          <a href="https://ssemarket.cn" target="_blank" class="btn btn-ghost btn-lg">了解我们</a>
-        </div>
-      </div>
 
-      <div class="hero-strip" aria-hidden="true">
-        <div class="strip-track">
-          <span v-for="(w, i) in stripWords" :key="i" class="strip-word">{{ w }}</span>
+        <!-- 右：线条球图案（还原混元式流动线条） -->
+        <div class="hero-art reveal in" aria-hidden="true">
+          <LineOrb :size="orbSize" :lines="72" :alpha="0.14" :speed="0.1" />
         </div>
       </div>
     </header>
@@ -102,6 +103,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { api, type Job, type SiteConfig } from '../api'
+import LineOrb from '../components/LineOrb.vue'
 
 const jobs = ref<Job[]>([])
 const site = ref<SiteConfig | null>(null)
@@ -109,6 +111,7 @@ const q = ref('')
 const loading = ref(true)
 const error = ref('')
 const year = new Date().getFullYear()
+const orbSize = ref(420)
 
 const filtered = computed(() => jobs.value)
 
@@ -128,10 +131,9 @@ const heroTitleRest = computed(() => {
 
 const heroLines = computed(() => (site.value?.heroSubtitle || '').split('\n').filter(Boolean))
 
-const stripWords = computed(() => {
-  const base = (site.value?.bgWords || '技术 · 创造 · 热爱 · 成长').split('·').map((s) => s.trim()).filter(Boolean)
-  return [...base, ...base, ...base]
-})
+function syncOrbSize() {
+  orbSize.value = window.innerWidth <= 920 ? 280 : window.innerWidth <= 1200 ? 360 : 440
+}
 
 async function load() {
   loading.value = true
@@ -173,13 +175,18 @@ function badgeClass(t: string) {
 let observer: IntersectionObserver | null = null
 onMounted(() => {
   load()
+  syncOrbSize()
+  window.addEventListener('resize', syncOrbSize)
   observer = new IntersectionObserver(
     (entries) => entries.forEach((e) => e.isIntersecting && e.target.classList.add('in')),
     { threshold: 0.1 },
   )
   document.querySelectorAll('.reveal').forEach((n) => observer?.observe(n))
 })
-onUnmounted(() => observer?.disconnect())
+onUnmounted(() => {
+  observer?.disconnect()
+  window.removeEventListener('resize', syncOrbSize)
+})
 </script>
 
 <style scoped>
@@ -189,7 +196,7 @@ onUnmounted(() => observer?.disconnect())
   background: var(--bg);
 }
 
-/* ===== 细线场景：极淡网格 + 一条流动的蓝色光带 ===== */
+/* ===== 背景：一层极淡网格，足够 ===== */
 .scene {
   position: fixed;
   inset: 0;
@@ -205,37 +212,6 @@ onUnmounted(() => observer?.disconnect())
     linear-gradient(90deg, rgba(31, 35, 41, 0.028) 1px, transparent 1px);
   background-size: 72px 72px;
   mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 80%);
-}
-.beam {
-  position: absolute;
-  top: 0;
-  left: 10%;
-  width: 1px;
-  height: 42%;
-  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.55), transparent);
-  transform: rotate(24deg);
-  transform-origin: top center;
-  animation: beamDrift 11s ease-in-out infinite;
-}
-.beam::after {
-  content: '';
-  position: absolute;
-  top: 18%;
-  left: 480px;
-  width: 1px;
-  height: 30%;
-  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.3), transparent);
-}
-@keyframes beamDrift {
-  0%,
-  100% {
-    opacity: 0.5;
-    transform: rotate(24deg) translateX(0);
-  }
-  50% {
-    opacity: 1;
-    transform: rotate(24deg) translateX(26px);
-  }
 }
 
 /* ===== 导航 ===== */
@@ -256,20 +232,11 @@ onUnmounted(() => observer?.disconnect())
   align-items: center;
   gap: 10px;
 }
-.logo-mark {
+.logo-img {
   width: 30px;
   height: 30px;
-  border-radius: 9px;
-  background: var(--brand);
-  display: grid;
-  place-items: center;
-}
-.logo-mark i {
-  width: 10px;
-  height: 10px;
-  background: #fff;
-  border-radius: 3px;
-  transform: rotate(45deg);
+  object-fit: contain;
+  display: block;
 }
 .brand-name {
   font-weight: 700;
@@ -289,11 +256,15 @@ onUnmounted(() => observer?.disconnect())
   color: var(--brand);
 }
 
-/* ===== Hero：大留白 + 大字号排版 ===== */
+/* ===== Hero：左文右图两栏，大留白 ===== */
 .hero-inner {
   max-width: 1080px;
   margin: 0 auto;
-  padding: 96px 24px 72px;
+  padding: 72px 24px 88px;
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
+  align-items: center;
+  gap: 40px;
 }
 .hero-eyebrow {
   display: flex;
@@ -329,9 +300,9 @@ onUnmounted(() => observer?.disconnect())
 }
 .hero-title {
   margin: 0 0 22px;
-  font-size: clamp(44px, 7.4vw, 82px);
+  font-size: clamp(40px, 6.2vw, 68px);
   font-weight: 800;
-  line-height: 1.04;
+  line-height: 1.06;
   letter-spacing: -0.035em;
   color: var(--ink);
 }
@@ -339,9 +310,9 @@ onUnmounted(() => observer?.disconnect())
   color: var(--brand);
 }
 .hero-sub {
-  max-width: 560px;
+  max-width: 520px;
   margin: 0 0 40px;
-  font-size: 17px;
+  font-size: 16px;
   line-height: 1.85;
   color: var(--ink-soft);
 }
@@ -358,31 +329,22 @@ onUnmounted(() => observer?.disconnect())
   transform: translateX(3px);
 }
 
-/* ===== 滚动词条：细字 + 大间距，一条极淡分隔线 ===== */
-.hero-strip {
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 0 24px 30px;
-  overflow: hidden;
-  border-bottom: 1px solid var(--line);
-  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
-}
-.strip-track {
+/* 右侧线条球：缓慢自转的呼吸感，不做其他装饰 */
+.hero-art {
   display: flex;
-  gap: 72px;
-  width: max-content;
-  animation: marquee 26s linear infinite;
+  justify-content: center;
 }
-.strip-word {
-  color: var(--ink-faint);
-  font-size: 14px;
-  font-weight: 500;
-  letter-spacing: 0.22em;
-  white-space: nowrap;
+.hero-art :deep(canvas) {
+  animation: orbIn 1.4s var(--ease) both;
 }
-@keyframes marquee {
+@keyframes orbIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
   to {
-    transform: translateX(-33.333%);
+    opacity: 1;
+    transform: none;
   }
 }
 
@@ -460,7 +422,7 @@ onUnmounted(() => observer?.disconnect())
   transition: background 0.2s ease, padding-left 0.25s var(--ease);
 }
 .job-row:hover {
-  background: #fdfefe;
+  background: #ffffff;
   padding-left: 20px;
 }
 .job-main {
@@ -559,9 +521,14 @@ onUnmounted(() => observer?.disconnect())
   animation: spin 0.8s linear infinite;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 920px) {
   .hero-inner {
-    padding: 60px 0 48px;
+    grid-template-columns: 1fr;
+    padding: 48px 24px 64px;
+    gap: 24px;
+  }
+  .hero-art {
+    order: -1;
   }
   .job-row {
     flex-direction: column;

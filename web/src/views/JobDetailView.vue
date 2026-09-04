@@ -2,13 +2,12 @@
   <div class="page">
     <div class="scene" aria-hidden="true">
       <div class="grid" />
-      <div class="beam" />
     </div>
 
     <header class="topbar">
       <div class="topbar-inner">
         <RouterLink class="brand" to="/">
-          <span class="logo-mark"><i /></span>
+          <img class="logo-img" src="/logo.png" alt="logo" />
           <span class="brand-name">软工集市</span>
           <span class="brand-suffix">· 招聘</span>
         </RouterLink>
@@ -158,28 +157,6 @@ onMounted(load)
   background-size: 72px 72px;
   mask-image: radial-gradient(ellipse 90% 50% at 50% 0%, #000 15%, transparent 75%);
 }
-.beam {
-  position: absolute;
-  top: 0;
-  right: 16%;
-  width: 1px;
-  height: 38%;
-  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.45), transparent);
-  transform: rotate(-20deg);
-  transform-origin: top center;
-  animation: beamDrift 10s ease-in-out infinite;
-}
-@keyframes beamDrift {
-  0%,
-  100% {
-    opacity: 0.45;
-    transform: rotate(-20deg) translateX(0);
-  }
-  50% {
-    opacity: 0.9;
-    transform: rotate(-20deg) translateX(20px);
-  }
-}
 
 .topbar {
   position: relative;
@@ -201,20 +178,11 @@ onMounted(load)
   align-items: center;
   gap: 8px;
 }
-.logo-mark {
+.logo-img {
   width: 26px;
   height: 26px;
-  border-radius: 8px;
-  background: var(--brand);
-  display: grid;
-  place-items: center;
-}
-.logo-mark i {
-  width: 9px;
-  height: 9px;
-  background: #fff;
-  border-radius: 3px;
-  transform: rotate(45deg);
+  object-fit: contain;
+  display: block;
 }
 .brand-name {
   font-weight: 700;
