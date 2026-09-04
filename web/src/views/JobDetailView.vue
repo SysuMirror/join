@@ -1,18 +1,18 @@
 <template>
   <div class="page">
-    <div class="bg-scene" aria-hidden="true">
-      <span class="orb orb-a" />
-      <span class="orb orb-b" />
-      <div class="grid-lines" />
+    <div class="scene" aria-hidden="true">
+      <div class="grid" />
+      <div class="beam" />
     </div>
 
     <header class="topbar">
       <div class="topbar-inner">
         <RouterLink class="brand" to="/">
           <span class="logo-mark"><i /></span>
-          <span class="brand-mark">软工集市</span>
+          <span class="brand-name">软工集市</span>
           <span class="brand-suffix">· 招聘</span>
         </RouterLink>
+        <RouterLink class="back" to="/">← 返回职位列表</RouterLink>
       </div>
     </header>
 
@@ -21,58 +21,53 @@
       <p v-if="error" class="error">{{ error }}</p>
 
       <template v-if="job">
-        <RouterLink class="back" to="/">← 返回职位列表</RouterLink>
-
-        <section class="card panel job-header reveal in">
-          <div class="job-badge-glow" />
-          <div class="job-head">
-            <div>
-              <h1 class="job-title">{{ job.title }}</h1>
-              <div class="job-meta">
-                <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
-                <span>{{ job.department }}</span>
-                <span class="dot" />
-                <span>{{ job.location || '远程' }}</span>
-                <span v-if="job.headcount" class="dot" />
-                <span v-if="job.headcount">招 {{ job.headcount }} 人</span>
-              </div>
-            </div>
+        <section class="job-header reveal in">
+          <div class="job-meta-top">
+            <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
+            <span class="meta-item">{{ job.department }}</span>
+            <span class="sep" />
+            <span class="meta-item">{{ job.location || '远程' }}</span>
+            <span v-if="job.headcount" class="sep" />
+            <span v-if="job.headcount" class="meta-item">招 {{ job.headcount }} 人</span>
           </div>
+          <h1 class="job-title">{{ job.title }}</h1>
+          <p class="job-lead">{{ job.summary }}</p>
         </section>
 
         <div class="layout">
-          <section class="card panel desc reveal in">
-            <h3>职位描述</h3>
-            <p class="desc-text">{{ job.summary }}</p>
+          <section class="desc reveal in">
+            <h3 class="block-title">职位描述</h3>
             <pre class="desc-block">{{ job.description }}</pre>
           </section>
 
-          <aside class="card panel apply reveal in">
-            <h3>投递此职位</h3>
-            <form @submit.prevent="submit">
-              <div class="field">
-                <label>姓名</label>
-                <input v-model="form.name" maxlength="50" placeholder="选填" />
-              </div>
-              <div class="field">
-                <label>联系方式（邮箱或手机）*</label>
-                <input v-model="form.contact" required placeholder="用于我们联系你" />
-              </div>
-              <div class="field">
-                <label>简历链接</label>
-                <input v-model="form.resume_url" placeholder="https://… （选填，GitHub/网盘等）" />
-              </div>
-              <div class="field">
-                <label>自我介绍</label>
-                <textarea v-model="form.note" rows="4" placeholder="简单介绍自己（选填）" />
-              </div>
-              <p v-if="formError" class="error">{{ formError }}</p>
-              <p v-if="success" class="success">{{ success }}</p>
-              <button class="btn btn-primary" type="submit" :disabled="busy || !!success">
-                {{ busy ? '提交中…' : '提交投递' }}
-              </button>
-            </form>
-            <p class="hint">提交即表示同意我们联系你；投递信息仅用于本次招聘。</p>
+          <aside class="apply reveal in">
+            <div class="apply-sticky">
+              <h3 class="block-title">投递此职位</h3>
+              <form @submit.prevent="submit">
+                <div class="field">
+                  <label>姓名</label>
+                  <input v-model="form.name" maxlength="50" placeholder="选填" />
+                </div>
+                <div class="field">
+                  <label>联系方式（邮箱或手机）*</label>
+                  <input v-model="form.contact" required placeholder="用于我们联系你" />
+                </div>
+                <div class="field">
+                  <label>简历链接</label>
+                  <input v-model="form.resume_url" placeholder="https://… （选填）" />
+                </div>
+                <div class="field">
+                  <label>自我介绍</label>
+                  <textarea v-model="form.note" rows="4" placeholder="简单介绍自己（选填）" />
+                </div>
+                <p v-if="formError" class="error">{{ formError }}</p>
+                <p v-if="success" class="success">{{ success }}</p>
+                <button class="btn btn-primary btn-block" type="submit" :disabled="busy || !!success">
+                  {{ busy ? '提交中…' : '提交投递' }}
+                </button>
+              </form>
+              <p class="hint">提交即表示同意我们联系你；投递信息仅用于本次招聘。</p>
+            </div>
           </aside>
         </div>
       </template>
@@ -145,198 +140,197 @@ onMounted(load)
 .page {
   position: relative;
   min-height: 100vh;
-  overflow-x: hidden;
+  background: var(--bg);
 }
-.bg-scene {
+.scene {
   position: fixed;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
   pointer-events: none;
+  overflow: hidden;
 }
-.grid-lines {
+.grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(circle at 50% 20%, #000 0%, transparent 70%);
+  background-image:
+    linear-gradient(rgba(31, 35, 41, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 35, 41, 0.028) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 90% 50% at 50% 0%, #000 15%, transparent 75%);
 }
-.orb {
+.beam {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.55;
+  top: 0;
+  right: 16%;
+  width: 1px;
+  height: 38%;
+  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.45), transparent);
+  transform: rotate(-20deg);
+  transform-origin: top center;
+  animation: beamDrift 10s ease-in-out infinite;
 }
-.orb-a {
-  width: 400px;
-  height: 400px;
-  background: #5b8cff;
-  top: -60px;
-  left: -60px;
-  animation: pulseGlow 10s ease-in-out infinite;
-}
-.orb-b {
-  width: 360px;
-  height: 360px;
-  background: #9b5bff;
-  top: 20%;
-  right: -60px;
-  animation: pulseGlow 12s ease-in-out infinite;
-  animation-delay: 2s;
+@keyframes beamDrift {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: rotate(-20deg) translateX(0);
+  }
+  50% {
+    opacity: 0.9;
+    transform: rotate(-20deg) translateX(20px);
+  }
 }
 
 .topbar {
   position: relative;
-  z-index: 2;
+  z-index: 1;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(10px);
   border-bottom: 1px solid var(--line);
-  background: rgba(10, 15, 36, 0.5);
-  backdrop-filter: blur(12px);
 }
 .topbar-inner {
-  max-width: 1020px;
+  max-width: 1000px;
   margin: 0 auto;
   padding: 14px 24px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
 }
 .brand {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  font-weight: 700;
 }
 .logo-mark {
-  width: 28px;
-  height: 28px;
+  width: 26px;
+  height: 26px;
   border-radius: 8px;
-  background: var(--grad);
+  background: var(--brand);
   display: grid;
   place-items: center;
 }
 .logo-mark i {
   width: 9px;
   height: 9px;
-  background: #06101f;
+  background: #fff;
   border-radius: 3px;
   transform: rotate(45deg);
 }
-.brand-mark {
-  font-size: 18px;
+.brand-name {
+  font-weight: 700;
+  font-size: 15px;
 }
 .brand-suffix {
-  color: var(--ink-soft);
+  color: var(--ink-faint);
   font-weight: 500;
+}
+.back {
+  color: var(--ink-soft);
+  font-size: 13px;
+  transition: color 0.15s ease;
+}
+.back:hover {
+  color: var(--brand);
 }
 
 .container {
   position: relative;
   z-index: 1;
-  max-width: 1020px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 30px 24px 60px;
+  padding: 48px 24px 64px;
 }
-.back {
-  color: var(--ink-soft);
-  font-size: 13px;
-  display: inline-block;
-  margin-bottom: 18px;
-  transition: color 0.2s ease, transform 0.2s ease;
-}
-.back:hover {
-  color: var(--accent);
-  transform: translateX(-2px);
-}
+
 .job-header {
-  position: relative;
-  margin-bottom: 22px;
-  overflow: hidden;
+  margin-bottom: 40px;
 }
-.job-badge-glow {
-  position: absolute;
-  top: -60px;
-  right: -30px;
-  width: 240px;
-  height: 240px;
-  background: var(--grad-soft);
-  border-radius: 50%;
-  filter: blur(40px);
-}
-.job-head {
-  position: relative;
-}
-.job-title {
-  margin: 0 0 12px;
-  font-size: 32px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
-}
-.job-meta {
+.job-meta-top {
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.meta-item {
   color: var(--ink-soft);
   font-size: 14px;
-  flex-wrap: wrap;
 }
-.job-meta .dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--ink-faint);
+.sep {
+  width: 1px;
+  height: 12px;
+  background: var(--line);
+}
+.job-title {
+  margin: 0 0 14px;
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.12;
+}
+.job-lead {
+  margin: 0;
+  max-width: 640px;
+  font-size: 16px;
+  line-height: 1.8;
+  color: var(--ink-soft);
 }
 
 .layout {
   display: grid;
-  grid-template-columns: 1fr 380px;
-  gap: 22px;
+  grid-template-columns: 1fr 360px;
+  gap: 56px;
   align-items: start;
 }
-.desc h3 {
-  margin-bottom: 12px;
-  font-size: 18px;
-}
-.desc-text {
-  font-size: 15px;
-  line-height: 1.8;
+.block-title {
+  margin: 0 0 16px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
 }
 .desc-block {
   white-space: pre-wrap;
   font-family: var(--font);
-  font-size: 14px;
-  line-height: 1.85;
-  color: var(--ink-soft);
-  background: rgba(255, 255, 255, 0.03);
-  padding: 18px;
-  border-radius: 14px;
-  margin: 16px 0 0;
-  border: 1px solid var(--line);
+  font-size: 15px;
+  line-height: 1.9;
+  color: var(--ink);
+  margin: 0;
+}
+.apply-sticky {
+  position: sticky;
+  top: 24px;
 }
 .apply form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
-.apply .btn {
-  margin-top: 6px;
+.btn-block {
+  width: 100%;
 }
 
 .spinner {
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   margin-right: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: var(--accent);
+  border: 2px solid var(--line);
+  border-top-color: var(--brand);
   border-radius: 50%;
   vertical-align: middle;
-  animation: spinSlow 0.8s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 @media (max-width: 720px) {
   .layout {
     grid-template-columns: 1fr;
+    gap: 36px;
   }
-  .job-title {
-    font-size: 26px;
+  .apply-sticky {
+    position: static;
   }
 }
 </style>

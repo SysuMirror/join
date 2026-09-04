@@ -1,20 +1,9 @@
 <template>
   <div class="page">
-    <!-- 全局背景粒子/光斑 -->
-    <div class="bg-scene" aria-hidden="true">
-      <span class="orb orb-a" />
-      <span class="orb orb-b" />
-      <span class="orb orb-c" />
-      <div class="grid-lines" />
-      <div class="noise" />
-    </div>
-
-    <!-- 公告栏 -->
-    <div v-if="site?.announcement" class="announce">
-      <div class="announce-inner">
-        <span class="announce-pill">NEW</span>
-        <span class="announce-text">{{ site.announcement }}</span>
-      </div>
+    <!-- 细线背景：网格 + 流动光线，克制点缀 -->
+    <div class="scene" aria-hidden="true">
+      <div class="grid" />
+      <div class="beam" />
     </div>
 
     <header class="hero">
@@ -24,35 +13,43 @@
           <span class="brand-name">{{ site?.brand || '软工集市' }}</span>
         </div>
         <div class="nav-links">
-          <a class="nav-link" href="https://ssemarket.cn" target="_blank">集市主页</a>
+          <a class="nav-link" href="https://ssemarket.cn" target="_blank">集市主页 ↗</a>
           <RouterLink class="nav-link" to="/login">管理入口</RouterLink>
         </div>
       </nav>
 
-      <div class="hero-inner reveal">
-        <div class="hero-eyebrow">WE ARE HIRING · 一起创造</div>
-        <h1 class="hero-title">
-          <span class="grad-text">{{ site?.heroTitle || '加入软工集市' }}</span>
-        </h1>
-        <p class="hero-sub">{{ heroLines.join('') }}</p>
+      <div class="hero-inner reveal in">
+        <div class="hero-eyebrow">
+          <span class="eyebrow-line" />
+          <span>{{ site?.tagline || '让每个热爱技术的人，都能找到属于他的舞台' }}</span>
+        </div>
+        <h1 class="hero-title">{{ heroTitleMain }}<span class="hero-title-accent">{{ heroTitleRest }}</span></h1>
+        <p class="hero-sub">{{ heroLines.join(' ') }}</p>
         <div class="hero-actions">
           <a href="#jobs" class="btn btn-primary btn-lg">查看职位 <span class="arrow">→</span></a>
           <a href="https://ssemarket.cn" target="_blank" class="btn btn-ghost btn-lg">了解我们</a>
         </div>
-        <div class="hero-words">
-          <span v-for="w in words" :key="w" class="word">{{ w }}</span>
-        </div>
       </div>
 
-      <div class="hero-scroll"><span />SCROLL</div>
+      <div class="hero-strip" aria-hidden="true">
+        <div class="strip-track">
+          <span v-for="(w, i) in stripWords" :key="i" class="strip-word">{{ w }}</span>
+        </div>
+      </div>
     </header>
 
     <main id="jobs" class="container">
+      <section v-if="site?.announcement" class="announce reveal">
+        <span class="announce-dot" />
+        <span class="announce-text">{{ site.announcement }}</span>
+      </section>
+
       <section class="section-head reveal">
-        <h2 class="section-title">开放职位 <span class="section-count">/ {{ filtered.length }}</span></h2>
-        <div class="toolbar">
-          <input v-model="q" class="search" placeholder="搜索职位 / 部门…" @input="filterJobs" />
+        <div>
+          <h2 class="section-title">开放职位</h2>
+          <p class="section-sub">共 {{ filtered.length }} 个职位正在招聘</p>
         </div>
+        <input v-model="q" class="search" placeholder="搜索职位 / 部门…" @input="filterJobs" />
       </section>
 
       <div v-if="loading" class="empty"><span class="spinner" />加载中…</div>
@@ -60,49 +57,43 @@
 
       <div v-else-if="filtered.length === 0" class="empty">暂无开放职位</div>
 
-      <div v-else class="job-grid">
+      <div v-else class="job-list">
         <RouterLink
           v-for="(job, i) in filtered"
           :key="job.id"
           :to="`/jobs/${job.slug}`"
-          class="card job-card reveal"
-          :class="{ in: true }"
-          :style="{ transitionDelay: `${i * 40}ms` }"
+          class="job-row reveal"
+          :style="{ transitionDelay: `${Math.min(i * 60, 300)}ms` }"
         >
-          <div class="job-glow" />
-          <div class="job-head">
-            <h3>{{ job.title }}</h3>
-            <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
+          <div class="job-main">
+            <div class="job-title-row">
+              <h3 class="job-title">{{ job.title }}</h3>
+              <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
+            </div>
+            <p class="job-summary">{{ job.summary }}</p>
+            <div class="job-meta">
+              <span>{{ job.department }}</span>
+              <span class="sep" />
+              <span>{{ job.location || '远程' }}</span>
+              <span v-if="job.headcount" class="sep" />
+              <span v-if="job.headcount">招 {{ job.headcount }} 人</span>
+            </div>
           </div>
-          <div class="job-meta">
-            <svg viewBox="0 0 24 24" class="ico"><path d="M3 21h18M5 21V7l7-4 7 4v14M9 21v-6h6v6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            <span>{{ job.department }}</span>
-            <span class="dot" />
-            <span>{{ job.location || '远程' }}</span>
-            <span v-if="job.headcount" class="dot" />
-            <span v-if="job.headcount">招 {{ job.headcount }} 人</span>
-          </div>
-          <p class="job-summary">{{ job.summary }}</p>
-          <div class="job-foot">
-            <span class="job-cta">投递这个职位 <span class="arrow">→</span></span>
+          <div class="job-side">
+            <span class="job-cta">投递 <span class="arrow">→</span></span>
           </div>
         </RouterLink>
       </div>
 
-      <section class="cta reveal">
-        <div class="cta-inner">
-          <h3>没有合适的职位？</h3>
-          <p>把你的简历发给我们，有机会被纳入人才库，未来有合适机会会第一时间联系你。</p>
-          <a :href="`mailto:${site?.contactEmail || 'hr@ssemarket.cn'}`" class="btn btn-primary">
+      <footer class="foot reveal">
+        <div class="foot-line" />
+        <div class="foot-row">
+          <span class="foot-brand">{{ site?.brand || '软工集市' }} · 招聘</span>
+          <a class="foot-mail" :href="`mailto:${site?.contactEmail || 'hr@ssemarket.cn'}`">
             {{ site?.contactEmail || 'hr@ssemarket.cn' }}
           </a>
+          <span class="foot-copy">© {{ year }}</span>
         </div>
-      </section>
-
-      <footer class="foot">
-        <span class="foot-brand">{{ site?.brand || '软工集市' }}</span>
-        <span class="foot-tag">{{ site?.tagline || '让每个热爱技术的人，都能找到属于他的舞台' }}</span>
-        <span class="foot-copy">© {{ year }} Join · {{ site?.contactEmail || 'hr@ssemarket.cn' }}</span>
       </footer>
     </main>
   </div>
@@ -121,10 +112,26 @@ const year = new Date().getFullYear()
 
 const filtered = computed(() => jobs.value)
 
-const heroLines = computed(() => (site.value?.heroSubtitle || '').split('\n'))
-const words = computed(() =>
-  (site.value?.bgWords || '技术 · 创造 · 热爱 · 成长').split('·').map((s) => s.trim()).filter(Boolean),
-)
+/** 主标题拆分：最后一个词用品牌蓝强调（如「加入软工集市」→「加入」+「软工集市」） */
+const heroTitleMain = computed(() => {
+  const t = site.value?.heroTitle || '加入软工集市'
+  const parts = t.split(/(\s+)/)
+  if (parts.length > 1) return parts.slice(0, -1).join('')
+  return t.slice(0, Math.max(t.length - 2, 0))
+})
+const heroTitleRest = computed(() => {
+  const t = site.value?.heroTitle || '加入软工集市'
+  const parts = t.split(/(\s+)/)
+  if (parts.length > 1) return parts[parts.length - 1]
+  return t.slice(Math.max(t.length - 2, 0))
+})
+
+const heroLines = computed(() => (site.value?.heroSubtitle || '').split('\n').filter(Boolean))
+
+const stripWords = computed(() => {
+  const base = (site.value?.bgWords || '技术 · 创造 · 热爱 · 成长').split('·').map((s) => s.trim()).filter(Boolean)
+  return [...base, ...base, ...base]
+})
 
 async function load() {
   loading.value = true
@@ -143,7 +150,6 @@ async function load() {
 function filterJobs() {
   const term = q.value.trim().toLowerCase()
   if (!term) {
-    // 重新全量
     load()
     return
   }
@@ -180,440 +186,390 @@ onUnmounted(() => observer?.disconnect())
 .page {
   position: relative;
   min-height: 100vh;
-  overflow-x: hidden;
+  background: var(--bg);
 }
 
-/* ===== 背景 ===== */
-.bg-scene {
+/* ===== 细线场景：极淡网格 + 一条流动的蓝色光带 ===== */
+.scene {
   position: fixed;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
   pointer-events: none;
+  overflow: hidden;
 }
-.grid-lines {
+.grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(circle at 50% 30%, #000 0%, transparent 75%);
+  background-image:
+    linear-gradient(rgba(31, 35, 41, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 35, 41, 0.028) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 20%, transparent 80%);
 }
-.noise {
+.beam {
   position: absolute;
-  inset: -50%;
-  opacity: 0.04;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.8' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
-  animation: floaty 12s ease-in-out infinite;
+  top: 0;
+  left: 10%;
+  width: 1px;
+  height: 42%;
+  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.55), transparent);
+  transform: rotate(24deg);
+  transform-origin: top center;
+  animation: beamDrift 11s ease-in-out infinite;
 }
-.orb {
+.beam::after {
+  content: '';
   position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.6;
+  top: 18%;
+  left: 480px;
+  width: 1px;
+  height: 30%;
+  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.3), transparent);
 }
-.orb-a {
-  width: 420px;
-  height: 420px;
-  background: #5b8cff;
-  top: -80px;
-  left: -60px;
-  animation: pulseGlow 9s ease-in-out infinite;
-}
-.orb-b {
-  width: 380px;
-  height: 380px;
-  background: #9b5bff;
-  top: 10%;
-  right: -80px;
-  animation: pulseGlow 11s ease-in-out infinite;
-  animation-delay: 2s;
-}
-.orb-c {
-  width: 320px;
-  height: 320px;
-  background: #24d8ff;
-  bottom: -60px;
-  left: 40%;
-  animation: pulseGlow 13s ease-in-out infinite;
-  animation-delay: 4s;
+@keyframes beamDrift {
+  0%,
+  100% {
+    opacity: 0.5;
+    transform: rotate(24deg) translateX(0);
+  }
+  50% {
+    opacity: 1;
+    transform: rotate(24deg) translateX(26px);
+  }
 }
 
-/* ===== 公告 ===== */
-.announce {
-  position: relative;
-  z-index: 2;
-  border-bottom: 1px solid var(--line);
-  background: rgba(10, 15, 36, 0.5);
-  backdrop-filter: blur(10px);
-}
-.announce-inner {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 10px 24px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 13px;
-  color: var(--ink-soft);
-}
-.announce-pill {
-  background: var(--grad);
-  color: #06101f;
-  font-weight: 700;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: var(--radius-pill);
-  flex: none;
-}
-.announce-text {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* ===== Hero ===== */
+/* ===== 导航 ===== */
 .hero {
   position: relative;
   z-index: 1;
-  padding: 24px 24px 0;
-  background: var(--grad-hero);
-  border-bottom: 1px solid var(--line);
 }
 .nav {
-  max-width: 1120px;
+  max-width: 1080px;
   margin: 0 auto;
+  padding: 20px 24px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0 24px;
 }
 .nav-brand {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
 }
 .logo-mark {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
-  background: var(--grad);
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  background: var(--brand);
   display: grid;
   place-items: center;
-  box-shadow: 0 4px 20px rgba(91, 140, 255, 0.4);
 }
 .logo-mark i {
-  width: 12px;
-  height: 12px;
-  background: #06101f;
-  border-radius: 4px;
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border-radius: 3px;
   transform: rotate(45deg);
 }
 .brand-name {
-  font-weight: 800;
-  font-size: 19px;
-  letter-spacing: 0.02em;
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -0.01em;
 }
 .nav-links {
   display: flex;
-  gap: 22px;
+  gap: 26px;
 }
 .nav-link {
   color: var(--ink-soft);
   font-size: 14px;
-  transition: color 0.2s ease;
-  position: relative;
+  transition: color 0.15s ease;
 }
 .nav-link:hover {
-  color: #fff;
-}
-.nav-link::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  bottom: -4px;
-  width: 0;
-  height: 2px;
-  background: var(--grad);
-  transition: width 0.25s var(--ease-spring);
-}
-.nav-link:hover::after {
-  width: 100%;
+  color: var(--brand);
 }
 
+/* ===== Hero：大留白 + 大字号排版 ===== */
 .hero-inner {
-  max-width: 1120px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 120px 0 90px;
+  padding: 96px 24px 72px;
 }
 .hero-eyebrow {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 8px;
-  font-size: 13px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--accent-3);
-  margin-bottom: 22px;
+  gap: 12px;
+  color: var(--ink-faint);
+  font-size: 14px;
+  margin-bottom: 26px;
 }
-.hero-eyebrow::before {
+.eyebrow-line {
+  width: 40px;
+  height: 1px;
+  background: var(--line);
+  position: relative;
+  overflow: hidden;
+}
+.eyebrow-line::after {
   content: '';
-  width: 26px;
-  height: 2px;
-  background: var(--grad);
+  position: absolute;
+  inset: 0;
+  background: var(--brand);
+  transform: translateX(-100%);
+  animation: lineSlide 3.2s var(--ease) infinite;
+}
+@keyframes lineSlide {
+  0% {
+    transform: translateX(-100%);
+  }
+  55%,
+  100% {
+    transform: translateX(100%);
+  }
 }
 .hero-title {
-  font-size: clamp(42px, 8vw, 84px);
-  font-weight: 900;
-  line-height: 1.02;
-  letter-spacing: -0.03em;
-  margin: 0 0 26px;
-  max-width: 900px;
+  margin: 0 0 22px;
+  font-size: clamp(44px, 7.4vw, 82px);
+  font-weight: 800;
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+  color: var(--ink);
+}
+.hero-title-accent {
+  color: var(--brand);
 }
 .hero-sub {
-  font-size: clamp(16px, 2.4vw, 20px);
-  line-height: 1.8;
-  color: var(--ink-soft);
+  max-width: 560px;
   margin: 0 0 40px;
-  max-width: 620px;
+  font-size: 17px;
+  line-height: 1.85;
+  color: var(--ink-soft);
 }
 .hero-actions {
   display: flex;
-  gap: 14px;
+  gap: 12px;
   flex-wrap: wrap;
-}
-.btn-lg {
-  padding: 14px 28px;
-  font-size: 16px;
-  border-radius: 14px;
 }
 .arrow {
   display: inline-block;
-  transition: transform 0.25s var(--ease-spring);
+  transition: transform 0.25s var(--ease);
 }
 .btn:hover .arrow {
-  transform: translateX(4px);
-}
-.hero-words {
-  display: flex;
-  gap: 40px;
-  margin-top: 70px;
-  flex-wrap: wrap;
-  opacity: 0.9;
-}
-.word {
-  font-size: 15px;
-  color: var(--ink-faint);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  animation: floaty 6s ease-in-out infinite;
-}
-.word:nth-child(2n) {
-  animation-delay: 1.2s;
-}
-.word:nth-child(3n) {
-  animation-delay: 2.4s;
+  transform: translateX(3px);
 }
 
-.hero-scroll {
-  max-width: 1120px;
+/* ===== 滚动词条：细字 + 大间距，一条极淡分隔线 ===== */
+.hero-strip {
+  max-width: 1080px;
   margin: 0 auto;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 0 26px;
-  color: var(--ink-faint);
-  font-size: 12px;
-  letter-spacing: 0.14em;
+  padding: 0 24px 30px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--line);
+  mask-image: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
 }
-.hero-scroll span {
-  width: 1px;
-  height: 40px;
-  background: linear-gradient(var(--accent), transparent);
-  animation: floaty 2s ease-in-out infinite;
+.strip-track {
+  display: flex;
+  gap: 72px;
+  width: max-content;
+  animation: marquee 26s linear infinite;
+}
+.strip-word {
+  color: var(--ink-faint);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
+  white-space: nowrap;
+}
+@keyframes marquee {
+  to {
+    transform: translateX(-33.333%);
+  }
 }
 
-/* ===== 职位列表 ===== */
+/* ===== 职位列表：细分隔线的行式布局 ===== */
 .container {
   position: relative;
   z-index: 1;
-  max-width: 1120px;
+  max-width: 1080px;
   margin: 0 auto;
-  padding: 60px 24px 48px;
+  padding: 56px 24px 40px;
 }
+.announce {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--brand-tint);
+  color: var(--ink-soft);
+  font-size: 14px;
+  margin-bottom: 44px;
+}
+.announce-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--brand);
+  flex: none;
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 rgba(51, 112, 255, 0.25);
+  }
+  50% {
+    opacity: 0.6;
+    box-shadow: 0 0 0 6px rgba(51, 112, 255, 0);
+  }
+}
+
 .section-head {
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
   gap: 20px;
-  margin-bottom: 28px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
 }
 .section-title {
-  font-size: 32px;
-  font-weight: 800;
   margin: 0;
-  letter-spacing: -0.02em;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
 }
-.section-count {
+.section-sub {
+  margin: 6px 0 0;
   color: var(--ink-faint);
-  font-weight: 500;
-  font-size: 20px;
+  font-size: 14px;
 }
 
-.job-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 20px;
+/* 行式职位：靠细线分隔，hover 时轻抬升 + 右侧箭头 */
+.job-list {
+  border-top: 1px solid var(--line);
 }
-.job-card {
-  position: relative;
-  padding: 26px;
+.job-row {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
-  overflow: hidden;
-  transition: transform 0.35s var(--ease-spring), border-color 0.3s ease, box-shadow 0.35s ease;
-}
-.job-card:hover {
-  transform: translateY(-6px);
-  border-color: rgba(91, 140, 255, 0.4);
-  box-shadow: var(--shadow-glow);
-}
-.job-glow {
-  position: absolute;
-  top: -40px;
-  right: -40px;
-  width: 140px;
-  height: 140px;
-  background: var(--grad-soft);
-  border-radius: 50%;
-  filter: blur(30px);
-  opacity: 0;
-  transition: opacity 0.35s ease, transform 0.35s ease;
-}
-.job-card:hover .job-glow {
-  opacity: 1;
-  transform: scale(1.2);
-}
-.job-head {
-  display: flex;
+  align-items: center;
   justify-content: space-between;
-  align-items: flex-start;
-  gap: 10px;
+  gap: 28px;
+  padding: 26px 12px;
+  border-bottom: 1px solid var(--line);
+  transition: background 0.2s ease, padding-left 0.25s var(--ease);
 }
-.job-head h3 {
+.job-row:hover {
+  background: #fdfefe;
+  padding-left: 20px;
+}
+.job-main {
+  min-width: 0;
+}
+.job-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.job-title {
   margin: 0;
   font-size: 20px;
   font-weight: 700;
-  letter-spacing: -0.01em;
-}
-.job-meta {
-  color: var(--ink-soft);
-  font-size: 13px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-.job-meta .dot {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--ink-faint);
-}
-.ico {
-  width: 15px;
-  height: 15px;
-  color: var(--accent);
+  letter-spacing: -0.015em;
 }
 .job-summary {
+  margin: 8px 0 0;
   color: var(--ink-soft);
   font-size: 14px;
   line-height: 1.7;
-  margin: 0;
-  flex: 1;
+  max-width: 640px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
-.job-foot {
-  border-top: 1px solid var(--line);
-  padding-top: 14px;
+.job-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
+.sep {
+  width: 1px;
+  height: 12px;
+  background: var(--line);
+}
+.job-side {
+  flex: none;
 }
 .job-cta {
-  color: var(--accent);
+  color: var(--ink-soft);
   font-size: 14px;
   font-weight: 600;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  white-space: nowrap;
+  transition: color 0.2s ease;
 }
-
-/* ===== CTA ===== */
-.cta {
-  margin-top: 56px;
-}
-.cta-inner {
-  background: var(--grad-soft);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  padding: 48px;
-  text-align: center;
-}
-.cta-inner h3 {
-  font-size: 26px;
-  margin: 0 0 10px;
-  font-weight: 800;
-}
-.cta-inner p {
-  color: var(--ink-soft);
-  margin: 0 0 24px;
-  line-height: 1.7;
+.job-row:hover .job-cta {
+  color: var(--brand);
 }
 
 /* ===== 页脚 ===== */
 .foot {
-  margin-top: 70px;
-  padding-top: 28px;
-  border-top: 1px solid var(--line);
+  margin-top: 72px;
+}
+.foot-line {
+  height: 1px;
+  background: var(--line);
+  margin-bottom: 22px;
+}
+.foot-row {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 16px;
   flex-wrap: wrap;
-  justify-content: space-between;
   color: var(--ink-faint);
   font-size: 13px;
+  padding-bottom: 24px;
 }
 .foot-brand {
   color: var(--ink);
-  font-weight: 700;
+  font-weight: 600;
 }
-.foot-copy {
-  font-size: 12px;
+.foot-mail {
+  color: var(--ink-soft);
+  transition: color 0.15s ease;
+}
+.foot-mail:hover {
+  color: var(--brand);
 }
 
 .spinner {
   display: inline-block;
-  width: 20px;
-  height: 20px;
+  width: 18px;
+  height: 18px;
   margin-right: 8px;
-  border: 2px solid rgba(255, 255, 255, 0.2);
-  border-top-color: var(--accent);
+  border: 2px solid var(--line);
+  border-top-color: var(--brand);
   border-radius: 50%;
   vertical-align: middle;
-  animation: spinSlow 0.8s linear infinite;
+  animation: spin 0.8s linear infinite;
 }
 
 @media (max-width: 720px) {
   .hero-inner {
-    padding: 70px 0 50px;
+    padding: 60px 0 48px;
   }
-  .hero-words {
-    gap: 20px;
+  .job-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 14px;
   }
   .section-title {
-    font-size: 26px;
-  }
-  .cta-inner {
-    padding: 32px 22px;
+    font-size: 24px;
   }
 }
 </style>

@@ -1,27 +1,20 @@
 <template>
   <div class="page">
-    <div class="bg-scene" aria-hidden="true">
-      <span class="orb orb-a" />
-      <span class="orb orb-b" />
-      <div class="grid-lines" />
-    </div>
-
     <div class="wrap">
       <header class="head">
-        <div class="head-info">
-          <div class="head-kicker">ADMIN CONSOLE</div>
+        <div>
           <h1 class="page-title">招聘管理</h1>
           <p class="page-sub">管理职位、调配站点文案、审核投递，初审通过后自动推送到开发者平台 OA 审批。</p>
         </div>
-        <div class="auth">
-          <div class="user-chip" v-if="me">
+        <div class="auth" v-if="me">
+          <div class="user-chip">
             <span class="user-avatar">{{ (me.name || me.email)[0]?.toUpperCase() }}</span>
             <span class="user-meta">
               <span class="user-name">{{ me.name || me.email.split('@')[0] }}</span>
               <span class="user-email">{{ me.email }}</span>
             </span>
           </div>
-          <button class="btn btn-ghost btn-sm" @click="logout">退出登录</button>
+          <button class="btn btn-ghost btn-sm" @click="logout">退出</button>
         </div>
       </header>
 
@@ -36,14 +29,12 @@
         <!-- ===== 站点文案配置 ===== -->
         <section v-show="tab === 'site'" class="card panel">
           <div class="row-between">
-            <div>
-              <h3>站点文案配置</h3>
-              <p class="hint">调整首页 Hero、公告、品牌与联系方式，保存后前台即时生效。</p>
-            </div>
+            <h3>站点文案配置</h3>
             <button class="btn btn-primary btn-sm" @click="saveSite" :disabled="siteSaving">
               {{ siteSaving ? '保存中…' : '保存配置' }}
             </button>
           </div>
+          <p class="hint">调整首页 Hero、公告、品牌与联系方式，保存后前台即时生效。</p>
           <div class="fields">
             <div class="field">
               <label>品牌名</label>
@@ -441,70 +432,21 @@ onMounted(loadAll)
 
 <style scoped>
 .page {
-  position: relative;
   min-height: 100vh;
-  overflow-x: hidden;
+  background: var(--bg);
 }
-.bg-scene {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  overflow: hidden;
-  pointer-events: none;
-}
-.grid-lines {
-  position: absolute;
-  inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(circle at 50% 0%, #000 0%, transparent 70%);
-}
-.orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.5;
-}
-.orb-a {
-  width: 420px;
-  height: 420px;
-  background: #5b8cff;
-  top: -80px;
-  left: -60px;
-  animation: pulseGlow 10s ease-in-out infinite;
-}
-.orb-b {
-  width: 360px;
-  height: 360px;
-  background: #9b5bff;
-  top: 20%;
-  right: -80px;
-  animation: pulseGlow 12s ease-in-out infinite;
-  animation-delay: 2s;
-}
-
 .wrap {
-  position: relative;
-  z-index: 1;
-  max-width: 1060px;
+  max-width: 1000px;
   margin: 0 auto;
-  padding: 40px 24px 60px;
+  padding: 36px 24px 56px;
 }
 .head {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: 16px;
-  margin-bottom: 24px;
+  margin-bottom: 20px;
   flex-wrap: wrap;
-}
-.head-kicker {
-  font-size: 12px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--accent);
-  margin-bottom: 8px;
 }
 .auth {
   display: flex;
@@ -515,8 +457,8 @@ onMounted(loadAll)
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 6px 12px 6px 6px;
-  background: var(--surface);
+  padding: 5px 12px 5px 5px;
+  background: #fff;
   border: 1px solid var(--line);
   border-radius: var(--radius-pill);
 }
@@ -524,8 +466,8 @@ onMounted(loadAll)
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  background: var(--grad);
-  color: #06101f;
+  background: var(--brand-soft);
+  color: var(--brand);
   display: grid;
   place-items: center;
   font-weight: 700;
@@ -534,7 +476,7 @@ onMounted(loadAll)
 .user-meta {
   display: flex;
   flex-direction: column;
-  line-height: 1.2;
+  line-height: 1.25;
 }
 .user-name {
   font-size: 13px;
@@ -554,29 +496,26 @@ onMounted(loadAll)
   white-space: nowrap;
 }
 
-/* 统计卡 */
 .stats-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
   gap: 12px;
   margin: 12px 0 18px;
 }
 .stat {
-  background: var(--surface);
+  background: var(--bg);
   border: 1px solid var(--line);
-  border-radius: 14px;
-  padding: 16px;
+  border-radius: 10px;
+  padding: 14px 16px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
 }
 .stat b {
-  font-size: 28px;
+  font-size: 26px;
   font-weight: 800;
-  background: var(--grad);
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
+  color: var(--ink);
+  letter-spacing: -0.02em;
 }
 .stat span {
   font-size: 12px;
@@ -588,10 +527,10 @@ onMounted(loadAll)
   font-size: 13px;
 }
 .site-msg.success {
-  color: var(--ok);
+  color: #059669;
 }
 .site-msg.error {
-  color: var(--danger);
+  color: #dc2626;
 }
 
 .timeline {
@@ -616,11 +555,11 @@ onMounted(loadAll)
 }
 .dot-approve,
 .dot-submit {
-  background: var(--ok);
+  background: #16a34a;
 }
 .dot-reject,
 .dot-revoke {
-  background: var(--danger);
+  background: #dc2626;
 }
 .tl-head {
   display: flex;

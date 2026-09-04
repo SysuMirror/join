@@ -1,26 +1,27 @@
 <template>
   <div class="page">
-    <div class="bg-scene" aria-hidden="true">
-      <span class="orb orb-a" />
-      <span class="orb orb-b" />
-      <div class="grid-lines" />
+    <div class="scene" aria-hidden="true">
+      <div class="grid" />
+      <div class="beam" />
     </div>
 
     <div class="auth-wrap">
       <RouterLink class="back-home" to="/">← 返回职位列表</RouterLink>
 
-      <div class="card panel auth-card reveal in">
-        <div class="auth-logo"><i /></div>
-        <h1 class="auth-title">登录</h1>
-        <p class="auth-sub">用你的邮箱登录，管理招聘职位与投递审核。</p>
+      <div class="auth-card reveal in">
+        <div class="auth-head">
+          <span class="logo-mark"><i /></span>
+          <h1 class="auth-title">登录</h1>
+          <p class="auth-sub">用你的邮箱登录，管理招聘职位与投递审核。</p>
+        </div>
 
-        <form @submit.prevent="onLogin" class="fields">
-          <div class="field full">
+        <form @submit.prevent="onLogin">
+          <div class="field">
             <label>邮箱</label>
             <input v-model="email" type="email" placeholder="you@example.com" required autocomplete="email" />
           </div>
 
-          <div class="field full">
+          <div class="field">
             <label>验证码</label>
             <div class="code-row">
               <input v-model="code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" required />
@@ -30,13 +31,11 @@
             </div>
           </div>
 
-          <p v-if="error" class="error full">{{ error }}</p>
+          <p v-if="error" class="error">{{ error }}</p>
 
-          <div class="field full">
-            <button class="btn btn-primary btn-block" type="submit" :disabled="busy || sending">
-              {{ busy ? '登录中…' : '登录' }}
-            </button>
-          </div>
+          <button class="btn btn-primary btn-block" type="submit" :disabled="busy || sending">
+            {{ busy ? '登录中…' : '登录' }}
+          </button>
         </form>
 
         <div class="sso-row">
@@ -44,7 +43,9 @@
           <span class="sso-text">或</span>
           <span class="sso-line" />
         </div>
-        <button class="btn btn-ghost btn-block" @click="ssoLogin" :disabled="!ssoEnabled">使用集市账号登录（SSO）</button>
+        <button class="btn btn-ghost btn-block" @click="ssoLogin" :disabled="!ssoEnabled">
+          使用集市账号登录（SSO）
+        </button>
       </div>
     </div>
   </div>
@@ -152,113 +153,109 @@ onUnmounted(() => {
   min-height: 100vh;
   display: grid;
   place-items: center;
-  overflow-x: hidden;
   padding: 24px;
+  background: var(--bg);
 }
-.bg-scene {
+.scene {
   position: fixed;
   inset: 0;
   z-index: 0;
-  overflow: hidden;
   pointer-events: none;
+  overflow: hidden;
 }
-.grid-lines {
+.grid {
   position: absolute;
   inset: 0;
-  background-image: linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-  background-size: 60px 60px;
-  mask-image: radial-gradient(circle at 50% 40%, #000 0%, transparent 70%);
+  background-image:
+    linear-gradient(rgba(31, 35, 41, 0.028) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 35, 41, 0.028) 1px, transparent 1px);
+  background-size: 72px 72px;
+  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 10%, transparent 75%);
 }
-.orb {
+.beam {
   position: absolute;
-  border-radius: 50%;
-  filter: blur(60px);
-  opacity: 0.6;
+  top: 0;
+  left: 20%;
+  width: 1px;
+  height: 40%;
+  background: linear-gradient(180deg, transparent, rgba(51, 112, 255, 0.4), transparent);
+  transform: rotate(22deg);
+  transform-origin: top center;
+  animation: beamDrift 10s ease-in-out infinite;
 }
-.orb-a {
-  width: 420px;
-  height: 420px;
-  background: #5b8cff;
-  top: -60px;
-  left: -60px;
-  animation: pulseGlow 10s ease-in-out infinite;
-}
-.orb-b {
-  width: 380px;
-  height: 380px;
-  background: #9b5bff;
-  bottom: -60px;
-  right: -60px;
-  animation: pulseGlow 12s ease-in-out infinite;
-  animation-delay: 2s;
+@keyframes beamDrift {
+  0%,
+  100% {
+    opacity: 0.4;
+    transform: rotate(22deg) translateX(0);
+  }
+  50% {
+    opacity: 0.85;
+    transform: rotate(22deg) translateX(18px);
+  }
 }
 
 .auth-wrap {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 440px;
+  max-width: 400px;
 }
 .back-home {
   display: inline-block;
   color: var(--ink-soft);
   font-size: 13px;
-  margin-bottom: 18px;
-  transition: color 0.2s ease;
+  margin-bottom: 16px;
+  transition: color 0.15s ease;
 }
 .back-home:hover {
-  color: #fff;
+  color: var(--brand);
 }
 .auth-card {
-  padding: 40px;
-  background: linear-gradient(180deg, rgba(20, 27, 54, 0.9), rgba(12, 17, 38, 0.94));
+  background: #fff;
+  border: 1px solid var(--line);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-glow);
+  box-shadow: var(--shadow-lift);
+  padding: 36px;
+  animation: fadeUp 0.5s var(--ease);
 }
-.auth-logo {
-  width: 54px;
-  height: 54px;
-  border-radius: 16px;
-  background: var(--grad);
+.auth-head {
+  margin-bottom: 26px;
+}
+.logo-mark {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: var(--brand);
   display: grid;
   place-items: center;
-  margin-bottom: 22px;
-  box-shadow: 0 10px 34px rgba(91, 140, 255, 0.4);
+  margin-bottom: 18px;
 }
-.auth-logo i {
-  width: 18px;
-  height: 18px;
-  background: #06101f;
-  border-radius: 6px;
+.logo-mark i {
+  width: 13px;
+  height: 13px;
+  background: #fff;
+  border-radius: 4px;
   transform: rotate(45deg);
 }
 .auth-title {
-  margin: 0 0 10px;
-  font-size: 28px;
+  margin: 0 0 8px;
+  font-size: 26px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 .auth-sub {
+  margin: 0;
   color: var(--ink-soft);
   font-size: 14px;
-  margin: 0 0 28px;
+  line-height: 1.6;
+}
+
+form {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.fields {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  flex-direction: column;
   gap: 14px;
-}
-.field.full {
-  grid-column: 1 / -1;
-}
-.field label {
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
 .code-row {
   display: flex;
@@ -269,17 +266,17 @@ onUnmounted(() => {
 }
 .code-btn {
   flex: none;
-  min-width: 120px;
+  min-width: 116px;
 }
 .btn-block {
   width: 100%;
-  border-radius: 12px;
 }
+
 .sso-row {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 20px 0 14px;
+  margin: 18px 0 12px;
   color: var(--ink-faint);
 }
 .sso-line {
@@ -289,18 +286,5 @@ onUnmounted(() => {
 }
 .sso-text {
   font-size: 12px;
-}
-.error {
-  grid-column: 1 / -1;
-  text-align: center;
-  margin: 0;
-}
-.error.full {
-  margin: 4px 0 0;
-}
-@media (max-width: 480px) {
-  .auth-card {
-    padding: 28px;
-  }
 }
 </style>
