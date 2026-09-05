@@ -42,12 +42,12 @@
     <!-- 职位区：独立白色色带，与 Hero 灰底形成清晰分界 -->
     <main id="jobs" class="band">
       <div class="container">
-        <section v-if="site?.announcement" v-reveal class="announce">
+        <section v-if="site?.announcement" v-reveal class="announce" style="transition-delay: 80ms">
           <span class="announce-dot" />
           <span class="announce-text">{{ site.announcement }}</span>
         </section>
 
-        <section v-reveal class="section-head">
+        <section v-reveal class="section-head" style="transition-delay: 160ms">
           <div>
             <h2 class="section-title">开放职位</h2>
             <p class="section-sub">共 {{ filtered.length }} 个职位正在招聘</p>
@@ -89,7 +89,7 @@
           </RouterLink>
         </div>
 
-        <footer v-reveal class="foot">
+        <footer v-reveal class="foot" style="transition-delay: 240ms">
           <div class="foot-line" />
           <div class="foot-row">
             <span class="foot-brand">{{ site?.brand || '软工集市' }} · 招聘</span>
@@ -135,7 +135,7 @@ const revealObserver =
             }
           }
         },
-        { threshold: 0.08 },
+        { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
       )
     : null
 

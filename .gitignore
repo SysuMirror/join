@@ -14,3 +14,7 @@ web/.env
 .npm/
 deploy/oauth.env
 .pack-sseinfra-stage/
+# 部署压缩包不进仓库（打包产物独立交付）
+*.zip
+*.tgz
+*.tar.gz
