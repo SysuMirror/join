@@ -1,11 +1,13 @@
 node_modules/
+# 编译产物：允许进仓库（部署服务器不再编译）
 dist/
+!server/dist/
+!web/dist/
 data/
 *.db
 .env
 server/.env
 web/.env
-web/dist/
 .DS_Store
 *.log
 .npm-cache/

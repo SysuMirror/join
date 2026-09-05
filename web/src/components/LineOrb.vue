@@ -8,9 +8,9 @@
  * 一团大圆上的极细弧线，围绕圆心缓慢旋转、各自相位呼吸，
  * 视觉上形成莫尔条纹般的流动感。纯黑白灰，无填充。
  *
- * 圆心简笔 logo：六边形螺旋（等距立方体）一笔画 ——
- * 外圈完整六边形，向内盘旋两圈，顶部紧密堆叠成「卷」，末端小钩收笔；
- * 动画为一支笔从顶点起笔，沿路径连续描绘直至收笔（dash 渐描绘实现）。
+ * 圆心简笔 logo（一笔画）：外圈六边形起笔，向内盘旋两圈，
+ * 圈底逐层堆叠成 V，顶部以小钩收笔 —— 对齐参考 logo（等距立方体螺旋）。
+ * 全部顶点做圆角平滑；动画为一支笔从顶点起笔沿路径连续描绘至收笔。
  */
 import { onMounted, onUnmounted, ref } from 'vue'
 
@@ -40,7 +40,7 @@ let intro = 0
 const INTRO_DURATION = 2600
 /** logo 起笔时间与描绘时长（ms） */
 const LOGO_START = 900
-const LOGO_DURATION = 2600
+const LOGO_DURATION = 2800
 
 // 每条线的独立参数（生成一次，避免每帧随机抖动）
 type Lane = {
@@ -75,32 +75,23 @@ function smooth(t: number): number {
 }
 
 /**
- * 简笔 logo 路径（单位坐标，六边形外接圆半径 = 1，y 向下为正）。
- * 六边形螺旋一笔画：第 k 圈为缩小 δ、中心上移 m 的六边形（顺时针），
- * 圈与圈在顶部顶点处由短竖线连接 → 顶部紧密成卷、底部 V 形疏朗，
- * 与参考 logo（等距立方体螺旋）一致；形状保证完整闭合。
+ * 简笔 logo 控制点（单位坐标，y 向下为正）—— 等距立方体（正方体）线框。
+ * 「一角朝前」的等距投影：外轮廓为尖顶六边形（上尖 T / 下尖 B / 左右垂直棱），
+ * 中心 M 为离观察者最近的顶点，向外连三条棱到上、左下、右下三个顶点 → 立体感。
+ * 一笔画路径：沿外轮廓绕一圈回 T，再垂直下到中心，分别向 RB、LB 画两条辐条。
  */
 function buildLogoPath(): [number, number][] {
-  const h = Math.sqrt(3) / 2
-  const DELTA = 0.33 // 每圈外接圆半径收缩量
-  const DRIFT = -0.13 // 每圈中心 y 漂移（负 = 上移，顶部更紧密）
-  const pts: [number, number][] = []
-  for (let k = 0; k < 3; k++) {
-    const r = 1 - DELTA * k
-    const c = DRIFT * k
-    const V: [number, number][] = [
-      [0, c - r], // 顶点 T
-      [h * r, c - r / 2], // 右上
-      [h * r, c + r / 2], // 右下
-      [0, c + r], // 底点 B
-      [-h * r, c + r / 2], // 左下
-      [-h * r, c - r / 2], // 左上
-    ]
-    pts.push(...V, V[0]) // 闭合本圈；下一圈起点（新顶点）与 本圈顶点 的连线即为顶部连接段
-  }
-  // 收笔小钩（内圈顶部向内卷）
-  pts.push([0.07, -0.55], [0.07, -0.48], [0.01, -0.445])
-  return pts
+  const w = 1
+  const h = 2 / Math.sqrt(3) // 尖顶六边形半高，宽高比 √3/2 ≈ 0.866
+  const T: [number, number] = [0, -h] // 上尖
+  const R: [number, number] = [w, -h / 2] // 右上
+  const RB: [number, number] = [w, h / 2] // 右下
+  const B: [number, number] = [0, h] // 下尖
+  const LB: [number, number] = [-w, h / 2] // 左下
+  const L: [number, number] = [-w, -h / 2] // 左上
+  const M: [number, number] = [0, 0] // 中心（近角）
+  // 一笔画：外轮廓一圈 → 回 T → 下到中心 → 辐条到 RB → 回中心 → 辐条到 LB
+  return [T, R, RB, B, LB, L, T, M, RB, M, LB]
 }
 
 const LOGO_PATH = buildLogoPath()
@@ -111,21 +102,44 @@ let logoCum: number[] = []
 let logoTotal = 0
 let logoBuiltFor = 0
 
-/** 按 u（外接圆半径像素）缓存缩放后的路径与累计弧长 */
+/**
+ * 按 u（外接圆半径像素）构建「圆角加密」折线：
+ * 每个顶点用二次贝塞尔做圆角（半径 0.09u，按邻边长度自适应截断），
+ * 曲线细分采样成密集点列 —— 既用于描边渲染，也用于笔尖弧长定位。
+ */
 function ensureLogoBuilt(u: number) {
   if (logoBuiltFor === u) return
   logoBuiltFor = u
-  logoPts = LOGO_PATH.map(([x, y]) => ({ x: x * u, y: y * u }))
+  const raw = LOGO_PATH.map(([x, y]) => ({ x: x * u, y: y * u }))
+  const R = 0.09 * u
+  const out: Pt[] = [raw[0]]
+  const qbez = (a: Pt, c: Pt, b: Pt, t: number): Pt => ({
+    x: (1 - t) * (1 - t) * a.x + 2 * (1 - t) * t * c.x + t * t * b.x,
+    y: (1 - t) * (1 - t) * a.y + 2 * (1 - t) * t * c.y + t * t * b.y,
+  })
+  for (let i = 1; i < raw.length - 1; i++) {
+    const p = raw[i - 1]
+    const v = raw[i]
+    const n = raw[i + 1]
+    const d1 = Math.hypot(v.x - p.x, v.y - p.y) || 1
+    const d2 = Math.hypot(n.x - v.x, n.y - v.y) || 1
+    const r1 = Math.min(R, d1 * 0.45)
+    const r2 = Math.min(R, d2 * 0.45)
+    const inP = { x: v.x - ((v.x - p.x) / d1) * r1, y: v.y - ((v.y - p.y) / d1) * r1 }
+    const outP = { x: v.x + ((n.x - v.x) / d2) * r2, y: v.y + ((n.y - v.y) / d2) * r2 }
+    out.push(inP)
+    for (let s = 1; s <= 6; s++) out.push(qbez(inP, v, outP, s / 7))
+  }
+  out.push(raw[raw.length - 1])
+  logoPts = out
   logoCum = [0]
   for (let i = 1; i < logoPts.length; i++) {
-    const dx = logoPts[i].x - logoPts[i - 1].x
-    const dy = logoPts[i].y - logoPts[i - 1].y
-    logoCum.push(logoCum[i - 1] + Math.hypot(dx, dy))
+    logoCum.push(logoCum[i - 1] + Math.hypot(logoPts[i].x - logoPts[i - 1].x, logoPts[i].y - logoPts[i - 1].y))
   }
   logoTotal = logoCum[logoCum.length - 1]
 }
 
-/** 弧长定位：返回距离起点 len 处的坐标（及所在段索引） */
+/** 弧长定位：返回距起点 len 处的坐标（笔尖位置） */
 function pointAtLength(len: number): Pt {
   for (let i = 1; i < logoCum.length; i++) {
     if (logoCum[i] >= len) {
@@ -190,17 +204,17 @@ function draw(time: number) {
   }
   ctx.globalAlpha = 1
 
-  // 简笔 logo：一笔画描绘（起笔于顶部顶点，沿螺旋连续画到收笔小钩）
+  // 简笔 logo：一笔画描绘（起笔于外圈顶点，螺旋向内，收笔小卷）
   if (props.showLogo) {
     const q = smooth((time - startTime - LOGO_START) / LOGO_DURATION)
     if (q > 0) drawLogo(ctx, cx, cy, R * 0.47, q)
   }
 }
 
-/** 一笔画 logo：dash 渐描绘 + 笔尖圆点 */
+/** 一笔画 logo：dash 渐描绘 + 笔尖圆点（模拟「笔」沿路径行进） */
 function drawLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, u: number, q: number) {
   ensureLogoBuilt(u)
-  const lw = Math.max(u * 0.06, 1.6)
+  const lw = Math.max(u * 0.055, 1.6)
 
   ctx.save()
   ctx.translate(cx, cy)
@@ -210,7 +224,7 @@ function drawLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, u: numb
   ctx.lineJoin = 'round'
   ctx.lineCap = 'round'
 
-  // 渐描绘：q=0 不显示，q=1 全部画完（从路径起点向终点生长）
+  // 渐描绘：q=0 不显示，q=1 全部画完（路径从起点向终点生长）
   ctx.setLineDash([logoTotal, logoTotal])
   ctx.lineDashOffset = logoTotal * (1 - q)
   ctx.beginPath()
@@ -219,7 +233,7 @@ function drawLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, u: numb
   ctx.stroke()
   ctx.setLineDash([])
 
-  // 笔尖：描绘中在当前笔画末端画一个小圆点，模拟「笔」
+  // 笔尖：描绘中在笔画末端画一个小圆点
   if (q < 1) {
     const tip = pointAtLength(logoTotal * q)
     ctx.beginPath()

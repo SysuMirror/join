@@ -11,13 +11,21 @@ $zip = Join-Path $repoRoot 'join-platform-sseinfra.zip'
 $stage = Join-Path $repoRoot '.pack-sseinfra-stage'
 
 function Copy-Tree {
-    param([string]$Src, [string]$Dst, [string[]]$ExcludeNames)
+    param([string]$Src, [string]$Dst, [string[]]$ExcludeNames, [string[]]$ExcludeRegex)
     New-Item -ItemType Directory -Force -Path $Dst | Out-Null
-    Get-ChildItem -LiteralPath $Src -Force |
-        Where-Object { $ExcludeNames -notcontains $_.Name } |
-        ForEach-Object {
-            Copy-Item -LiteralPath $_.FullName -Destination $Dst -Recurse -Force
+    $items = @(Get-ChildItem -LiteralPath $Src -Force)
+    foreach ($it in $items) {
+        $skip = $false
+        if ($ExcludeNames -contains $it.Name) { $skip = $true }
+        if (-not $skip) {
+            foreach ($pat in $ExcludeRegex) {
+                if ($it.Name -match $pat) { $skip = $true; break }
+            }
         }
+        if (-not $skip) {
+            Copy-Item -LiteralPath $it.FullName -Destination $Dst -Recurse -Force
+        }
+    }
 }
 
 function Assert-HasFile {
@@ -63,12 +71,12 @@ try {
     Copy-Item -LiteralPath (Join-Path $repoRoot 'README.md') -Destination (Join-Path $stage 'README.md') -Force
 
     $serverEx = @('node_modules', 'data', '.env', '.npm-cache', '.npm')
-    Copy-Tree -Src (Join-Path $repoRoot 'server') -Dst (Join-Path $stage 'server') -ExcludeNames $serverEx
+    Copy-Tree -Src (Join-Path $repoRoot 'server') -Dst (Join-Path $stage 'server') -ExcludeNames $serverEx -ExcludeRegex @('\.log$')
     Assert-HasFile (Join-Path $stage 'server\src\index.ts') 'server source'
     Assert-HasFile (Join-Path $stage 'server\dist\index.js') 'server dist'
 
     $webEx = @('node_modules', '.env', '.npm-cache', '.npm')
-    Copy-Tree -Src (Join-Path $repoRoot 'web') -Dst (Join-Path $stage 'web') -ExcludeNames $webEx
+    Copy-Tree -Src (Join-Path $repoRoot 'web') -Dst (Join-Path $stage 'web') -ExcludeNames $webEx -ExcludeRegex @('\.log$')
     Assert-HasFile (Join-Path $stage 'web\src\main.ts') 'web source'
     Assert-HasFile (Join-Path $stage 'web\dist\index.html') 'web dist'
 

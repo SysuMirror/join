@@ -21,8 +21,10 @@
   --shadow-lift: 0 12px 32px rgba(0, 0, 0, 0.07);
   --input-bg: #f4f4f4;
   --input-bg-hover: #eeeeee;
-  --font: 'IBM Plex Sans', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  --font: 'Inter', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui, sans-serif;
+  --font-display: 'Inter', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
+  --letter-tight: -0.04em;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 

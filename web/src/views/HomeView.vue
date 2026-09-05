@@ -240,10 +240,10 @@ onUnmounted(() => {
   inset: 0;
   pointer-events: none;
   background-image:
-    linear-gradient(rgba(31, 35, 41, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 35, 41, 0.028) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, #000 20%, transparent 78%);
+    linear-gradient(rgba(31, 35, 41, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 35, 41, 0.06) 1px, transparent 1px);
+  background-size: 64px 64px;
+  mask-image: radial-gradient(ellipse 95% 78% at 50% 0%, #000 18%, transparent 80%);
 }
 
 /* ===== 入场动画 ===== */
@@ -364,11 +364,29 @@ onUnmounted(() => {
 }
 .hero-title {
   margin: 0 0 22px;
+  font-family: var(--font-display);
   font-size: clamp(40px, 6.2vw, 68px);
   font-weight: 800;
   line-height: 1.06;
-  letter-spacing: -0.035em;
+  letter-spacing: var(--letter-tight);
   color: var(--ink);
+  transform: skewX(-4deg);
+}
+/* 入场动画：标题专属，保留 skew 的同时做位移/模糊渐显 */
+.hero-title.enter {
+  animation-name: heroTitleIn;
+}
+@keyframes heroTitleIn {
+  from {
+    opacity: 0;
+    transform: skewX(-4deg) translateY(26px);
+    filter: blur(6px);
+  }
+  to {
+    opacity: 1;
+    transform: skewX(-4deg);
+    filter: none;
+  }
 }
 .hero-title-accent {
   color: var(--brand);
@@ -409,11 +427,11 @@ onUnmounted(() => {
   }
 }
 
-/* ===== 职位区：白色色带，与 Hero 灰底清晰分界 ===== */
+/* ===== 职位区：白色色带；顶部快速灰→白过渡，迅速拉开与 Hero 的色距 ===== */
 .band {
   position: relative;
   z-index: 1;
-  background: var(--bg-elevated);
+  background: linear-gradient(180deg, #ededed 0%, var(--bg-elevated) 56px);
 }
 .container {
   max-width: 1080px;
