@@ -8,10 +8,9 @@
  * 一团大圆上的极细弧线，围绕圆心缓慢旋转、各自相位呼吸，
  * 视觉上形成莫尔条纹般的流动感。纯黑白灰，无填充。
  *
- * 本次增强：
- * - 所有插值用 smoothstep 缓动，过渡更圆滑（无硬切）。
- * - 圆心处用品牌蓝「一行一行」地绘制简笔 logo（六边形外框 + 双层 S 折线），
- *   随扫描线自上而下渐次显现，与圆环入场错开。
+ * 圆心简笔 logo：六边形螺旋（等距立方体）一笔画 ——
+ * 外圈完整六边形，向内盘旋两圈，顶部紧密堆叠成「卷」，末端小钩收笔；
+ * 动画为一支笔从顶点起笔，沿路径连续描绘直至收笔（dash 渐描绘实现）。
  */
 import { onMounted, onUnmounted, ref } from 'vue'
 
@@ -27,10 +26,10 @@ const props = withDefaults(
     speed?: number
     /** 是否在圆心绘制简笔 logo */
     showLogo?: boolean
-    /** 简笔 logo 线条颜色 */
+    /** 简笔 logo 线条颜色（灰调） */
     logoColor?: string
   }>(),
-  { size: 420, lines: 72, alpha: 0.15, speed: 0.1, showLogo: true, logoColor: '#3370ff' },
+  { size: 420, lines: 72, alpha: 0.15, speed: 0.1, showLogo: true, logoColor: '#7b8087' },
 )
 
 const cv = ref<HTMLCanvasElement | null>(null)
@@ -39,20 +38,17 @@ let running = true
 /** 入场生长进度 0→1（约 2.6s），线条由内向外依次展开 */
 let intro = 0
 const INTRO_DURATION = 2600
+/** logo 起笔时间与描绘时长（ms） */
+const LOGO_START = 900
+const LOGO_DURATION = 2600
 
 // 每条线的独立参数（生成一次，避免每帧随机抖动）
 type Lane = {
-  /** 椭圆横向半径系数（0~1，相对 R） */
   rx: number
-  /** 椭圆纵向半径系数 */
   ry: number
-  /** 初始相位 */
   phase: number
-  /** 呼吸幅度（rx/ry 随时间摆动的比例） */
   breathe: number
-  /** 透明度乘数 */
   a: number
-  /** 线宽 */
   w: number
 }
 
@@ -72,42 +68,76 @@ function makeLanes(n: number): Lane[] {
   return lanes
 }
 
-/** smoothstep：0→1，两端圆滑，用于一切过渡插值 */
+/** smoothstep：0→1，两端圆滑 */
 function smooth(t: number): number {
   const x = Math.max(0, Math.min(1, t))
   return x * x * (3 - 2 * x)
 }
 
-/** 简笔 logo：六边形外框 + 双层 S 折线（归一化坐标，y 向下为正） */
-const LOGO_LINES: [number, number][][] = [
-  // 六边形外框（闭合，尖顶朝上）
-  [
-    [-0.866, -0.5],
-    [0, -1],
-    [0.866, -0.5],
-    [0.866, 0.5],
-    [0, 1],
-    [-0.866, 0.5],
-    [-0.866, -0.5],
-  ],
-  // S 折线（外层）
-  [
-    [-0.5, -0.6],
-    [0.5, -0.6],
-    [0.5, -0.1],
-    [-0.5, -0.1],
-    [-0.5, 0.45],
-    [0.36, 0.45],
-  ],
-  // S 折线（内层）
-  [
-    [-0.32, -0.42],
-    [0.32, -0.42],
-    [0.32, -0.22],
-    [-0.32, -0.22],
-    [-0.32, 0.32],
-  ],
-]
+/**
+ * 简笔 logo 路径（单位坐标，六边形外接圆半径 = 1，y 向下为正）。
+ * 六边形螺旋一笔画：第 k 圈为缩小 δ、中心上移 m 的六边形（顺时针），
+ * 圈与圈在顶部顶点处由短竖线连接 → 顶部紧密成卷、底部 V 形疏朗，
+ * 与参考 logo（等距立方体螺旋）一致；形状保证完整闭合。
+ */
+function buildLogoPath(): [number, number][] {
+  const h = Math.sqrt(3) / 2
+  const DELTA = 0.33 // 每圈外接圆半径收缩量
+  const DRIFT = -0.13 // 每圈中心 y 漂移（负 = 上移，顶部更紧密）
+  const pts: [number, number][] = []
+  for (let k = 0; k < 3; k++) {
+    const r = 1 - DELTA * k
+    const c = DRIFT * k
+    const V: [number, number][] = [
+      [0, c - r], // 顶点 T
+      [h * r, c - r / 2], // 右上
+      [h * r, c + r / 2], // 右下
+      [0, c + r], // 底点 B
+      [-h * r, c + r / 2], // 左下
+      [-h * r, c - r / 2], // 左上
+    ]
+    pts.push(...V, V[0]) // 闭合本圈；下一圈起点（新顶点）与 本圈顶点 的连线即为顶部连接段
+  }
+  // 收笔小钩（内圈顶部向内卷）
+  pts.push([0.07, -0.55], [0.07, -0.48], [0.01, -0.445])
+  return pts
+}
+
+const LOGO_PATH = buildLogoPath()
+
+type Pt = { x: number; y: number }
+let logoPts: Pt[] = []
+let logoCum: number[] = []
+let logoTotal = 0
+let logoBuiltFor = 0
+
+/** 按 u（外接圆半径像素）缓存缩放后的路径与累计弧长 */
+function ensureLogoBuilt(u: number) {
+  if (logoBuiltFor === u) return
+  logoBuiltFor = u
+  logoPts = LOGO_PATH.map(([x, y]) => ({ x: x * u, y: y * u }))
+  logoCum = [0]
+  for (let i = 1; i < logoPts.length; i++) {
+    const dx = logoPts[i].x - logoPts[i - 1].x
+    const dy = logoPts[i].y - logoPts[i - 1].y
+    logoCum.push(logoCum[i - 1] + Math.hypot(dx, dy))
+  }
+  logoTotal = logoCum[logoCum.length - 1]
+}
+
+/** 弧长定位：返回距离起点 len 处的坐标（及所在段索引） */
+function pointAtLength(len: number): Pt {
+  for (let i = 1; i < logoCum.length; i++) {
+    if (logoCum[i] >= len) {
+      const t = (len - logoCum[i - 1]) / (logoCum[i] - logoCum[i - 1] || 1)
+      return {
+        x: logoPts[i - 1].x + (logoPts[i].x - logoPts[i - 1].x) * t,
+        y: logoPts[i - 1].y + (logoPts[i].y - logoPts[i - 1].y) * t,
+      }
+    }
+  }
+  return logoPts[logoPts.length - 1]
+}
 
 let lanes: Lane[] = []
 let startTime = 0
@@ -143,7 +173,6 @@ function draw(time: number) {
 
   for (const lane of lanes) {
     const wob = Math.sin(t * 0.6 + lane.phase) * lane.breathe
-    // 每条线按自身半径错峰出现：内侧先展开，外侧后展开（smoothstep 圆滑过渡）
     const laneStart = (lane.rx - 0.55) / 0.45
     const laneProgress = smooth((intro - laneStart * 0.5) / 0.5)
     if (laneProgress <= 0) continue
@@ -161,50 +190,43 @@ function draw(time: number) {
   }
   ctx.globalAlpha = 1
 
-  // 简笔 logo：在 intro 后半段开始「一行一行」自上而下显现
+  // 简笔 logo：一笔画描绘（起笔于顶部顶点，沿螺旋连续画到收笔小钩）
   if (props.showLogo) {
-    const logoProgress = smooth((intro - 0.5) / 0.5)
-    if (logoProgress > 0) {
-      drawLogo(ctx, cx, cy, R * 0.42, logoProgress, cssSize)
-    }
+    const q = smooth((time - startTime - LOGO_START) / LOGO_DURATION)
+    if (q > 0) drawLogo(ctx, cx, cy, R * 0.47, q)
   }
 }
 
-/** 逐行绘制简笔 logo：用 clip 从顶向下扩展，形成扫描式「一行行画」效果 */
-function drawLogo(
-  ctx: CanvasRenderingContext2D,
-  cx: number,
-  cy: number,
-  u: number,
-  p: number,
-  cssSize: number,
-) {
-  const top = cy - u * 2
-  const bottom = cy + u * 2
-  const scanY = top + (bottom - top) * p
+/** 一笔画 logo：dash 渐描绘 + 笔尖圆点 */
+function drawLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, u: number, q: number) {
+  ensureLogoBuilt(u)
+  const lw = Math.max(u * 0.06, 1.6)
 
   ctx.save()
-  ctx.beginPath()
-  ctx.rect(0, 0, cssSize, scanY)
-  ctx.clip()
-
+  ctx.translate(cx, cy)
   ctx.strokeStyle = props.logoColor
-  ctx.lineWidth = Math.max(u * 0.08, 1.5)
+  ctx.fillStyle = props.logoColor
+  ctx.lineWidth = lw
   ctx.lineJoin = 'round'
-  ctx.globalAlpha = smooth(p) // 随扫描增强
+  ctx.lineCap = 'round'
 
-  for (const line of LOGO_LINES) {
+  // 渐描绘：q=0 不显示，q=1 全部画完（从路径起点向终点生长）
+  ctx.setLineDash([logoTotal, logoTotal])
+  ctx.lineDashOffset = logoTotal * (1 - q)
+  ctx.beginPath()
+  ctx.moveTo(logoPts[0].x, logoPts[0].y)
+  for (let i = 1; i < logoPts.length; i++) ctx.lineTo(logoPts[i].x, logoPts[i].y)
+  ctx.stroke()
+  ctx.setLineDash([])
+
+  // 笔尖：描绘中在当前笔画末端画一个小圆点，模拟「笔」
+  if (q < 1) {
+    const tip = pointAtLength(logoTotal * q)
     ctx.beginPath()
-    for (let i = 0; i < line.length; i++) {
-      const x = cx + line[i][0] * u
-      const y = cy + line[i][1] * u
-      if (i === 0) ctx.moveTo(x, y)
-      else ctx.lineTo(x, y)
-    }
-    ctx.stroke()
+    ctx.arc(tip.x, tip.y, lw * 0.72, 0, Math.PI * 2)
+    ctx.fill()
   }
   ctx.restore()
-  ctx.globalAlpha = 1
 }
 
 function loop(time: number) {
