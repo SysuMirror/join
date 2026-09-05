@@ -228,12 +228,14 @@ onUnmounted(() => {
   background: var(--bg);
 }
 
-/* ===== Hero：灰底 + 极淡网格（网格只在 Hero 内，不渗入职位区） ===== */
+/* ===== Hero：灰底 + 极淡网格，占满首屏，进入时无底部分割线 ===== */
 .hero {
   position: relative;
   overflow: hidden;
   background: var(--bg);
-  border-bottom: 1px solid var(--line);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 .grid {
   position: absolute;
@@ -322,9 +324,11 @@ onUnmounted(() => {
 .hero-inner {
   position: relative;
   z-index: 1;
+  flex: 1;
+  width: 100%;
   max-width: 1080px;
   margin: 0 auto;
-  padding: 72px 24px 88px;
+  padding: 40px 24px 64px;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   align-items: center;
@@ -427,11 +431,11 @@ onUnmounted(() => {
   }
 }
 
-/* ===== 职位区：白色色带；顶部快速灰→白过渡，迅速拉开与 Hero 的色距 ===== */
+/* ===== 职位区：白色色带；顶部快速对齐 Hero 灰底→白过渡 ===== */
 .band {
   position: relative;
   z-index: 1;
-  background: linear-gradient(180deg, #ededed 0%, var(--bg-elevated) 56px);
+  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-elevated) 64px);
 }
 .container {
   max-width: 1080px;
