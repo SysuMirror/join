@@ -54,30 +54,34 @@ function clearLocal() {
 
 export type SsoProbeResult = 'ok' | 'expired' | 'unavailable'
 
-let ssoProbed = false
+let ssoProbePromise: Promise<SsoProbeResult> | null = null
 
 /**
- * 共享父域 sse_sso Cookie 探测（每次页面加载最多一次，路由守卫与登录页共用）。
+ * 共享父域 sse_sso Cookie 探测（每次页面加载最多一次，首屏 / 路由守卫 / 登录页
+ * 共享同一次请求：单飞，后到者 await 同一 Promise 而不是拿到空的降级结果）。
  * - ok：SSO 管理员身份已落地本地（token + user）；
  * - expired（401 no_sso/invalid_sso/not_internal/not_admin）：父域会话不可用；
  *   注意 not_admin 也可能是普通集市账号的 Cookie，路由守卫只对 staff 会话做单点登出；
  * - unavailable（503 / 网络）：UniSSO 不可达，调用方保留本地会话，不踢人。
  */
-async function probeSharedSso(): Promise<SsoProbeResult> {
-  if (ssoProbed) return 'unavailable'
-  ssoProbed = true
-  try {
-    const r = await api.ssoTry()
-    if (r?.user) {
-      localStorage.setItem('join_session_token', r.token)
-      setUser(r.user)
-      return 'ok'
-    }
-    return 'unavailable'
-  } catch (e) {
-    const status = (e as { status?: number } | null)?.status
-    return status === 401 ? 'expired' : 'unavailable'
+function probeSharedSso(): Promise<SsoProbeResult> {
+  if (!ssoProbePromise) {
+    ssoProbePromise = (async () => {
+      try {
+        const r = await api.ssoTry()
+        if (r?.user) {
+          localStorage.setItem('join_session_token', r.token)
+          setUser(r.user)
+          return 'ok' as const
+        }
+        return 'unavailable' as const
+      } catch (e) {
+        const status = (e as { status?: number } | null)?.status
+        return (status === 401 ? 'expired' : 'unavailable') as SsoProbeResult
+      }
+    })()
   }
+  return ssoProbePromise
 }
 
 export function useAuth() {
