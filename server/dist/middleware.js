@@ -80,8 +80,11 @@ export function clearSessionCookie(req, res) {
         parts.push('Secure');
     res.setHeader('Set-Cookie', parts.join('; '));
 }
-/** 共享父域 SSO Cookie：值由 UniSSO 签发，服务端只当会话指针使用 */
-export const SSO_COOKIE = 'sse_sso';
+/** 共享父域 SSO Cookie：值由 UniSSO 签发，服务端只当会话指针使用。
+ * 改名过渡（sse_sso→unisso_sid）：新名优先读，清除时新旧名都清。 */
+export const SSO_COOKIE = 'unisso_sid';
+export const SSO_COOKIE_LEGACY = 'sse_sso';
+export const SSO_COOKIE_NAMES = Array.from(new Set([SSO_COOKIE, SSO_COOKIE_LEGACY]));
 /** 登录成功后把 unisso 返回的 SSO 会话种到父域（可与会话 Cookie 并存） */
 export function setSsoCookie(res, value, meta = {}) {
     const name = meta.name || SSO_COOKIE;
@@ -89,11 +92,23 @@ export function setSsoCookie(res, value, meta = {}) {
     const maxAge = Number(meta.maxAge) > 0 ? Number(meta.maxAge) : 604800;
     res.append('Set-Cookie', `${name}=${value}; Domain=${domain}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`);
 }
-/** 清父域 SSO Cookie（登出 / 会话失效） */
+/** 清父域 SSO Cookie（登出 / 会话失效）；改名过渡：新旧名都清 */
 export function clearSsoCookie(res, meta = {}) {
-    const name = meta.name || SSO_COOKIE;
     const domain = meta.domain || '.ssemarket.cn';
-    res.append('Set-Cookie', `${name}=; Domain=${domain}; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+    const names = meta.name ? Array.from(new Set([meta.name, ...SSO_COOKIE_NAMES])) : SSO_COOKIE_NAMES;
+    for (const name of names) {
+        res.append('Set-Cookie', `${name}=; Domain=${domain}; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+    }
+}
+/** 改名过渡双读：unisso_sid 优先，sse_sso 兜底 */
+export function readSsoSession(req) {
+    const cookies = parseCookies(req.headers.cookie);
+    for (const name of SSO_COOKIE_NAMES) {
+        const v = String(cookies[name] || '').trim();
+        if (v)
+            return v;
+    }
+    return '';
 }
 /** 超级管理员 UniSSO sub 白名单：部署环境变量 JOIN_ADMIN_SUBS + 站点配置 adminSubs */
 export function adminSubsList() {

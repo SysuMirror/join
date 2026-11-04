@@ -11,9 +11,10 @@ import {
   setSessionCookie,
   clearSessionCookie,
   parseCookies,
-  SSO_COOKIE,
+  SSO_COOKIE_NAMES,
   setSsoCookie,
   clearSsoCookie,
+  readSsoSession,
 } from '../middleware.js'
 import { createSessionToken } from '../services/session.js'
 import {
@@ -336,8 +337,15 @@ authRouter.get('/me', requireUser, (req, res) => {
 
 // ===== 退出：本地会话 + 父域 SSO 会话一起清（单点登出） =====
 authRouter.post('/logout', async (req, res) => {
-  const sid = String(parseCookies(req.headers.cookie)[SSO_COOKIE] || '').trim()
-  if (sid) await revokeSession(sid)
+  // 改名过渡：两个 Cookie 名的会话都尝试吊销（同名去重）
+  const revoked = new Set<string>()
+  for (const name of SSO_COOKIE_NAMES) {
+    const sid = String(parseCookies(req.headers.cookie)[name] || '').trim()
+    if (sid && !revoked.has(sid)) {
+      revoked.add(sid)
+      await revokeSession(sid)
+    }
+  }
   clearSessionCookie(req, res)
   clearSsoCookie(res)
   ok(res, { done: true }, '已退出')
@@ -414,7 +422,8 @@ authRouter.post('/login', async (req, res) => {
 })
 
 /**
- * 静默 SSO：浏览器带上父域 sse_sso Cookie，服务端向 UniSSO session/verify
+ * 静默 SSO：浏览器带上父域共享 Cookie（unisso_sid，兼容旧名 sse_sso），
+ * 服务端向 UniSSO session/verify
  * 换取身份。仅院内 + 管理员白名单可进入后台；其他人 401，前端静默回落表单。
  */
 authRouter.post('/sso/try', async (req, res) => {
@@ -427,7 +436,7 @@ authRouter.post('/sso/try', async (req, res) => {
     return
   }
 
-  const sid = String(parseCookies(req.headers.cookie)[SSO_COOKIE] || '').trim()
+  const sid = readSsoSession(req)
   if (!sid) {
     fail(res, 401, 'no_sso')
     return
