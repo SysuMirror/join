@@ -1,159 +1,148 @@
 <template>
   <div class="page">
-    <header class="hero">
-      <!-- 极淡网格，仅存在于 Hero 区 -->
-      <div class="grid" aria-hidden="true" />
+    <SiteHeader />
 
-      <nav class="nav nav-enter">
-        <div class="nav-brand">
-          <img class="logo-img" src="/logo.png" alt="logo" />
-          <span class="brand-name">{{ site?.brand || '软工集市' }}</span>
-        </div>
-        <div class="nav-links">
-          <a class="nav-link" href="https://ssemarket.cn" target="_blank">集市主页 ↗</a>
-          <RouterLink class="nav-link" to="/login">管理入口</RouterLink>
-        </div>
-      </nav>
-
+    <header class="home-hero">
+      <div class="hero-grid" aria-hidden="true" />
       <div class="hero-inner">
-        <!-- 左：文案（逐级渐显） -->
         <div class="hero-copy">
-          <div class="hero-eyebrow enter" style="--d: 0.1s">
+          <div class="eyebrow enter" style="--d: 0.05s">
             <span class="eyebrow-line" />
-            <span>{{ site?.tagline || '让每个热爱技术的人，都能找到属于他的舞台' }}</span>
+            <span>{{ site?.tagline || '和一群热爱技术的人，一起把想法做出来' }}</span>
           </div>
-          <h1 class="hero-title enter" style="--d: 0.22s">
+          <h1 class="hero-title enter" style="--d: 0.16s">
             {{ heroTitleMain }}<span class="hero-title-accent">{{ heroTitleRest }}</span>
           </h1>
-          <p class="hero-sub enter" style="--d: 0.36s">{{ heroLines.join(' ') }}</p>
-          <div class="hero-actions enter" style="--d: 0.5s">
-            <a href="#jobs" class="btn btn-primary btn-lg">查看职位 <span class="arrow">→</span></a>
-            <a href="https://ssemarket.cn" target="_blank" class="btn btn-ghost btn-lg">了解我们</a>
+          <p class="hero-sub enter" style="--d: 0.28s">{{ heroLines.join(' ') }}</p>
+          <div class="hero-actions enter" style="--d: 0.4s">
+            <RouterLink class="btn btn-primary btn-lg" to="/jobs">
+              查看部门岗位 <span class="arrow">→</span>
+            </RouterLink>
+            <RouterLink class="btn btn-ghost btn-lg" to="/teams">席位公示</RouterLink>
           </div>
+          <p class="hero-note enter" style="--d: 0.52s">
+            注册即成为集市开发者 · 部门双选进组 · 多级答辩进入技术部
+          </p>
         </div>
 
-        <!-- 右：线条球（Canvas 内部实现从无到有的生长动画） -->
         <div class="hero-art" aria-hidden="true">
           <LineOrb :size="orbSize" :lines="72" :alpha="0.15" :speed="0.1" />
         </div>
       </div>
+
+      <div class="hero-stats enter" style="--d: 0.6s">
+        <div v-for="s in stats" :key="s.label" class="hero-stat">
+          <b>{{ s.value }}</b>
+          <span>{{ s.label }}</span>
+        </div>
+      </div>
     </header>
 
-    <!-- 职位区：独立白色色带，与 Hero 灰底形成清晰分界 -->
-    <main id="jobs" class="band">
-      <div class="container">
-        <section v-if="site?.announcement" v-reveal class="announce" style="transition-delay: 80ms">
-          <span class="announce-dot" />
-          <span class="announce-text">{{ site.announcement }}</span>
-        </section>
+    <div v-if="site?.announcement" class="announce-band">
+      <div class="announce-inner">
+        <span class="announce-dot" />
+        <span class="announce-text">{{ site.announcement }}</span>
+        <RouterLink class="announce-link" to="/jobs">去看看 →</RouterLink>
+      </div>
+    </div>
 
-        <section v-reveal class="section-head" style="transition-delay: 160ms">
+    <main class="page-main">
+      <p v-if="route.query.denied" class="notice notice-error">你没有后台管理权限。</p>
+      <p v-if="error" class="notice notice-error">{{ error }}</p>
+
+      <!-- 为什么加入 -->
+      <section class="section">
+        <div class="section-head">
           <div>
-            <h2 class="section-title">开放职位</h2>
-            <p class="section-sub">共 {{ filtered.length }} 个职位正在招聘</p>
+            <h2 class="section-title">为什么加入我们</h2>
+            <p class="section-sub">我们相信，好的东西来自认真做事的人。</p>
           </div>
-          <input v-model="q" class="search" placeholder="搜索职位 / 部门…" @input="filterJobs" />
-        </section>
+        </div>
+        <div class="why-grid">
+          <article v-for="(w, i) in whyItems" :key="w.title" v-reveal class="why-card" :style="{ transitionDelay: `${i * 80}ms` }">
+            <span class="why-index">0{{ i + 1 }}</span>
+            <h3>{{ w.title }}</h3>
+            <p>{{ w.desc }}</p>
+          </article>
+        </div>
+      </section>
 
-        <div v-if="loading" class="empty"><span class="spinner" />加载中…</div>
-        <p v-if="error" class="error">{{ error }}</p>
+      <!-- 成长路径 -->
+      <section id="process" class="section">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">成长路径：从开发者到圆桌</h2>
+            <p class="section-sub">全员开发者 → 部门双选进组 → 多级答辩进入技术部。每一步都有明确反馈。</p>
+          </div>
+          <RouterLink class="btn btn-ghost btn-sm" to="/teams">查看团队与席位 →</RouterLink>
+        </div>
+        <div class="process-grid">
+          <div v-for="(p, i) in processSteps" :key="p.title" v-reveal class="process-step" :style="{ transitionDelay: `${i * 80}ms` }">
+            <span class="process-num">{{ i + 1 }}</span>
+            <h3>{{ p.title }}</h3>
+            <p>{{ p.desc }}</p>
+          </div>
+        </div>
+        <p class="process-note">登录后可在「个人主页」中查看层级、部门、席位与答辩进度。</p>
+      </section>
 
-        <div v-else-if="filtered.length === 0" class="empty">暂无开放职位</div>
-
-        <div v-else class="job-list">
+      <!-- 常见问题 -->
+      <section v-if="faqPreview.length" class="section">
+        <div class="section-head">
+          <div>
+            <h2 class="section-title">常见问题</h2>
+            <p class="section-sub">关于报名、简历和交流，你可能想知道的。</p>
+          </div>
+          <RouterLink class="btn btn-ghost btn-sm" to="/faq">查看全部 →</RouterLink>
+        </div>
+        <div class="faq-preview">
           <RouterLink
-            v-for="(job, i) in filtered"
-            :key="job.id"
-            v-reveal
-            :to="`/jobs/${job.slug}`"
-            class="job-row"
-            :style="{ transitionDelay: `${Math.min(i * 70, 350)}ms` }"
+            v-for="f in faqPreview"
+            :key="f.id"
+            :to="{ path: '/faq', query: { category: f.category } }"
+            class="faq-mini"
           >
-            <div class="job-main">
-              <div class="job-title-row">
-                <h3 class="job-title">{{ job.title }}</h3>
-                <span class="badge" :class="badgeClass(job.type)">{{ typeLabel(job.type) }}</span>
-              </div>
-              <p class="job-summary">{{ job.summary }}</p>
-              <div class="job-meta">
-                <span>{{ job.department }}</span>
-                <span class="sep" />
-                <span>{{ job.location || '远程' }}</span>
-                <span v-if="job.headcount" class="sep" />
-                <span v-if="job.headcount">招 {{ job.headcount }} 人</span>
-              </div>
-            </div>
-            <div class="job-side">
-              <span class="job-cta">投递 <span class="arrow">→</span></span>
-            </div>
+            <span class="faq-mini-cat">{{ f.category }}</span>
+            <span class="faq-mini-q">{{ f.question }}</span>
+            <span class="faq-mini-arrow">↗</span>
           </RouterLink>
         </div>
+      </section>
 
-        <footer v-reveal class="foot" style="transition-delay: 240ms">
-          <div class="foot-line" />
-          <div class="foot-row">
-            <span class="foot-brand">{{ site?.brand || '软工集市' }} · 招聘</span>
-            <a class="foot-mail" :href="`mailto:${site?.contactEmail || 'hr@ssemarket.cn'}`">
-              {{ site?.contactEmail || 'hr@ssemarket.cn' }}
-            </a>
-            <span class="foot-copy">© {{ year }}</span>
-          </div>
-        </footer>
-      </div>
+      <!-- 底部 CTA -->
+      <section class="home-cta" v-reveal>
+        <div>
+          <h2>找到想一起做的事</h2>
+          <p>浏览全部部门岗位，提交你的报名。</p>
+        </div>
+        <RouterLink class="btn btn-light btn-lg" to="/jobs">
+          浏览全部岗位 <span class="arrow">→</span>
+        </RouterLink>
+      </section>
     </main>
+
+    <SiteFooter />
   </div>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { api, type Job, type SiteConfig } from '../api'
+import { useRoute } from 'vue-router'
+import { api, type Faq, type OrgOverview } from '../api'
 import LineOrb from '../components/LineOrb.vue'
+import SiteHeader from '../components/SiteHeader.vue'
+import SiteFooter from '../components/SiteFooter.vue'
+import { useSiteStore } from '../stores/site'
 
-const jobs = ref<Job[]>([])
-const site = ref<SiteConfig | null>(null)
-const q = ref('')
-const loading = ref(true)
+const route = useRoute()
+const siteState = useSiteStore().state
+const site = computed(() => siteState.site)
+
+const faqs = ref<Faq[]>([])
+const org = ref<OrgOverview | null>(null)
 const error = ref('')
-const year = new Date().getFullYear()
 const orbSize = ref(440)
 
-const filtered = computed(() => jobs.value)
-
-/**
- * v-reveal：滚动入场指令。
- * 在每个元素挂载时单独 observe，修复「异步渲染的职位行永远透明」的问题
- * （旧实现只在页面挂载时 observe 一次，后加载的元素观察不到）。
- */
-const revealObserver =
-  'IntersectionObserver' in window
-    ? new IntersectionObserver(
-        (entries) => {
-          for (const e of entries) {
-            if (e.isIntersecting) {
-              e.target.classList.add('in')
-              revealObserver?.unobserve(e.target)
-            }
-          }
-        },
-        { threshold: 0.12, rootMargin: '0px 0px -8% 0px' },
-      )
-    : null
-
-const vReveal = {
-  mounted(el: HTMLElement) {
-    if (!revealObserver) {
-      el.classList.add('reveal', 'in')
-      return
-    }
-    el.classList.add('reveal')
-    revealObserver.observe(el)
-  },
-  unmounted(el: HTMLElement) {
-    revealObserver?.unobserve(el)
-  },
-}
-
-/** 主标题拆分：最后一个词用品牌蓝强调 */
 const heroTitleMain = computed(() => {
   const t = site.value?.heroTitle || '加入软工集市'
   const parts = t.split(/(\s+)/)
@@ -166,48 +155,73 @@ const heroTitleRest = computed(() => {
   if (parts.length > 1) return parts[parts.length - 1]
   return t.slice(Math.max(t.length - 2, 0))
 })
-
 const heroLines = computed(() => (site.value?.heroSubtitle || '').split('\n').filter(Boolean))
 
+const stats = computed(() => [
+  { value: org.value?.stats.developers ?? site.value?.stats?.openJobs ?? '—', label: '活跃开发者' },
+  { value: org.value?.stats.departments ?? site.value?.stats?.departments ?? '—', label: '项目部门' },
+  { value: org.value?.stats.roundtable ?? '—', label: '圆桌开发者' },
+  {
+    value: org.value ? `${org.value.stats.seatsOccupied}/${org.value.stats.seats}` : '—',
+    label: '技术部席位',
+  },
+])
+
+const whyItems = [
+  {
+    title: '一起做点真东西',
+    desc: '从想法、设计到做出来，你参与的每一个项目都会真正被大家使用，而不是停留在讨论里。',
+  },
+  {
+    title: '和一群同好一起',
+    desc: '扁平、直接的协作方式。遇到问题时，你可以随时找到方向里的同学一起讨论，把精力花在把事情做好上。',
+  },
+  {
+    title: '一起成长',
+    desc: '技术分享、作品交流与一对一沟通是日常的一部分。我们更关心你能否在这里长出自己的方法。',
+  },
+]
+
+const processSteps = [
+  {
+    title: '注册即成为集市开发者',
+    desc: '统一身份登录自动获得开发者身份，无需审批，享有集市公开资源与开发者工坊资格。',
+  },
+  {
+    title: '部门双选',
+    desc: '在部门岗位投递意向部门。15 分钟轻沟通，重点看动机与时间投入，不卡技术门槛。',
+  },
+  {
+    title: '双向确认进组',
+    desc: '部门发出确认后本人确认，身份转为项目开发者；未匹配成功仍保留集市开发者身份。',
+  },
+  {
+    title: '发起技术部答辩',
+    desc: '本部门陈述事实、其他部门负责人交叉评审、学院/外院资源方评估资源分配主张。',
+  },
+  {
+    title: '圆桌与年度复审',
+    desc: '通过后按部门保底 + 浮动席位进入圆桌；年度复审不达标自动退出并释放席位。',
+  },
+]
+
+const faqPreview = computed(() => faqs.value.slice(0, 4))
+
 function syncOrbSize() {
-  orbSize.value = window.innerWidth <= 920 ? 280 : window.innerWidth <= 1200 ? 360 : 440
+  orbSize.value = window.innerWidth <= 920 ? 260 : window.innerWidth <= 1200 ? 360 : 440
 }
 
 async function load() {
-  loading.value = true
   error.value = ''
   try {
-    const [j, s] = await Promise.all([api.jobs(), api.site()])
-    jobs.value = j || []
-    site.value = s || null
+    // 强制刷新站点概览（部门岗位数等），避免使用会话内旧缓存
+    await useSiteStore().ensure(true)
+    const [f, o] = await Promise.all([api.faqs(), api.orgOverview()])
+    faqs.value = f || []
+    org.value = o
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
-  } finally {
-    loading.value = false
   }
-}
-
-function filterJobs() {
-  const term = q.value.trim().toLowerCase()
-  if (!term) {
-    load()
-    return
-  }
-  jobs.value = jobs.value.filter(
-    (j) =>
-      j.title.toLowerCase().includes(term) ||
-      j.department.toLowerCase().includes(term) ||
-      j.summary.toLowerCase().includes(term),
-  )
-}
-
-function typeLabel(t: string) {
-  const map: Record<string, string> = { fulltime: '全职', intern: '实习', parttime: '兼职' }
-  return map[t] || t
-}
-function badgeClass(t: string) {
-  const map: Record<string, string> = { fulltime: 'badge', intern: 'badge-green', parttime: 'badge-amber' }
-  return map[t] || 'badge'
 }
 
 onMounted(() => {
@@ -217,27 +231,23 @@ onMounted(() => {
 })
 onUnmounted(() => {
   window.removeEventListener('resize', syncOrbSize)
-  revealObserver?.disconnect()
 })
 </script>
 
 <style scoped>
 .page {
-  position: relative;
   min-height: 100vh;
   background: var(--bg);
 }
 
-/* ===== Hero：灰底 + 极淡网格，占满首屏，进入时无底部分割线 ===== */
-.hero {
+/* ===== Hero ===== */
+.home-hero {
   position: relative;
   overflow: hidden;
   background: var(--bg);
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
+  padding-bottom: 40px;
 }
-.grid {
+.hero-grid {
   position: absolute;
   inset: 0;
   pointer-events: none;
@@ -245,22 +255,7 @@ onUnmounted(() => {
     linear-gradient(rgba(31, 35, 41, 0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(31, 35, 41, 0.06) 1px, transparent 1px);
   background-size: 64px 64px;
-  mask-image: radial-gradient(ellipse 95% 78% at 50% 0%, #000 18%, transparent 80%);
-}
-
-/* ===== 入场动画 ===== */
-.nav-enter {
-  animation: navIn 0.8s var(--ease) both;
-}
-@keyframes navIn {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: none;
-  }
+  mask-image: radial-gradient(ellipse 95% 82% at 50% 0%, #000 18%, transparent 82%);
 }
 .enter {
   opacity: 0;
@@ -270,7 +265,7 @@ onUnmounted(() => {
 @keyframes heroIn {
   from {
     opacity: 0;
-    transform: translateY(26px);
+    transform: translateY(24px);
     filter: blur(6px);
   }
   to {
@@ -279,111 +274,35 @@ onUnmounted(() => {
     filter: none;
   }
 }
-
-/* ===== 导航 ===== */
-.nav {
-  position: relative;
-  z-index: 1;
-  max-width: 1080px;
-  margin: 0 auto;
-  padding: 20px 24px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-.nav-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.logo-img {
-  width: 30px;
-  height: 30px;
-  object-fit: contain;
-  display: block;
-}
-.brand-name {
-  font-weight: 700;
-  font-size: 16px;
-  letter-spacing: -0.01em;
-}
-.nav-links {
-  display: flex;
-  gap: 26px;
-}
-.nav-link {
-  color: var(--ink-soft);
-  font-size: 14px;
-  transition: color 0.15s ease;
-}
-.nav-link:hover {
-  color: var(--brand);
-}
-
-/* ===== Hero 两栏 ===== */
 .hero-inner {
   position: relative;
   z-index: 1;
-  flex: 1;
-  width: 100%;
-  max-width: 1080px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 40px 24px 64px;
+  padding: 72px 24px 24px;
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.85fr);
   align-items: center;
   gap: 40px;
-}
-.hero-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--ink-faint);
-  font-size: 14px;
-  margin-bottom: 26px;
-}
-.eyebrow-line {
-  width: 40px;
-  height: 1px;
-  background: var(--line);
-  position: relative;
-  overflow: hidden;
-}
-.eyebrow-line::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background: var(--brand);
-  transform: translateX(-100%);
-  animation: lineSlide 3.2s var(--ease) infinite 1.2s;
-}
-@keyframes lineSlide {
-  0% {
-    transform: translateX(-100%);
-  }
-  55%,
-  100% {
-    transform: translateX(100%);
-  }
+  min-height: 560px;
 }
 .hero-title {
-  margin: 0 0 22px;
+  margin: 22px 0 20px;
   font-family: var(--font-display);
-  font-size: clamp(40px, 6.2vw, 68px);
+  font-size: clamp(40px, 6vw, 66px);
   font-weight: 800;
   line-height: 1.06;
   letter-spacing: var(--letter-tight);
   color: var(--ink);
   transform: skewX(-4deg);
 }
-/* 入场动画：标题专属，保留 skew 的同时做位移/模糊渐显 */
 .hero-title.enter {
   animation-name: heroTitleIn;
 }
 @keyframes heroTitleIn {
   from {
     opacity: 0;
-    transform: skewX(-4deg) translateY(26px);
+    transform: skewX(-4deg) translateY(24px);
     filter: blur(6px);
   }
   to {
@@ -396,8 +315,8 @@ onUnmounted(() => {
   color: var(--brand);
 }
 .hero-sub {
-  max-width: 520px;
-  margin: 0 0 40px;
+  max-width: 540px;
+  margin: 0 0 32px;
   font-size: 16px;
   line-height: 1.85;
   color: var(--ink-soft);
@@ -407,6 +326,11 @@ onUnmounted(() => {
   gap: 12px;
   flex-wrap: wrap;
 }
+.hero-note {
+  margin: 22px 0 0;
+  color: var(--ink-faint);
+  font-size: 13px;
+}
 .arrow {
   display: inline-block;
   transition: transform 0.25s var(--ease);
@@ -414,7 +338,6 @@ onUnmounted(() => {
 .btn:hover .arrow {
   transform: translateX(3px);
 }
-
 .hero-art {
   display: flex;
   justify-content: center;
@@ -431,28 +354,47 @@ onUnmounted(() => {
   }
 }
 
-/* ===== 职位区：白色色带；顶部快速对齐 Hero 灰底→白过渡 ===== */
-.band {
+.hero-stats {
   position: relative;
   z-index: 1;
-  background: linear-gradient(180deg, var(--bg) 0%, var(--bg-elevated) 64px);
-}
-.container {
-  max-width: 1080px;
+  max-width: 1120px;
   margin: 0 auto;
-  padding: 64px 24px 40px;
+  padding: 0 24px;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
 }
-.announce {
+.hero-stat {
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+}
+.hero-stat b {
+  display: block;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+}
+.hero-stat span {
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+
+/* ===== 公告 ===== */
+.announce-band {
+  background: var(--brand-tint);
+  border-top: 1px solid #e6efff;
+  border-bottom: 1px solid #e6efff;
+}
+.announce-inner {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 12px 24px;
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 12px 18px;
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  background: var(--brand-tint);
+  font-size: 13px;
   color: var(--ink-soft);
-  font-size: 14px;
-  margin-bottom: 44px;
 }
 .announce-dot {
   width: 6px;
@@ -473,156 +415,242 @@ onUnmounted(() => {
     box-shadow: 0 0 0 6px rgba(51, 112, 255, 0);
   }
 }
-
-.section-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 20px;
-  margin-bottom: 20px;
-  flex-wrap: wrap;
-}
-.section-title {
-  margin: 0;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.025em;
-}
-.section-sub {
-  margin: 6px 0 0;
-  color: var(--ink-faint);
-  font-size: 14px;
-}
-
-/* 行式职位：细线分隔 + 滚动渐显 + hover 反馈 */
-.job-list {
-  border-top: 1px solid var(--line);
-}
-.job-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 28px;
-  padding: 26px 12px;
-  border-bottom: 1px solid var(--line);
-  transition: background 0.2s ease, padding-left 0.25s var(--ease);
-}
-.job-row:hover {
-  background: #fafbfc;
-  padding-left: 20px;
-}
-.job-main {
+.announce-text {
+  flex: 1;
   min-width: 0;
 }
-.job-title-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+.announce-link {
+  color: var(--brand);
+  font-weight: 600;
+  flex: none;
 }
-.job-title {
-  margin: 0;
-  font-size: 20px;
+
+/* ===== 为什么加入 ===== */
+.why-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+}
+.why-card {
+  padding: 18px 0 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+}
+.why-index {
+  display: inline-block;
+  margin-bottom: 18px;
+  color: var(--brand);
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+}
+.why-card h3 {
+  margin: 0 0 10px;
+  font-size: 18px;
   font-weight: 700;
   letter-spacing: -0.015em;
 }
-.job-summary {
-  margin: 8px 0 0;
+.why-card p {
+  margin: 0;
   color: var(--ink-soft);
-  font-size: 14px;
-  line-height: 1.7;
-  max-width: 640px;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
+  font-size: 13px;
+  line-height: 1.8;
 }
-.job-meta {
+
+/* ===== 流程 ===== */
+#process {
+  scroll-margin-top: 88px;
+}
+.process-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.process-step {
+  padding: 26px 16px 28px;
+  border-right: 1px solid var(--line);
+}
+.process-step:last-child {
+  border-right: none;
+}
+.process-num {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-bottom: 16px;
+  border-radius: 50%;
+  background: var(--ink);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.process-step h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+.process-step p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.process-note {
+  margin: 14px 0 0;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+
+/* ===== FAQ 预览 ===== */
+.faq-preview {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.faq-mini {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin-top: 12px;
+  padding: 14px 0;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  transition: color 0.15s ease;
+}
+.faq-mini:hover {
+  color: var(--brand);
+}
+.faq-mini-cat {
+  flex: none;
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--brand);
+  font-size: 11px;
+}
+.faq-mini-q {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.faq-mini-arrow {
   color: var(--ink-faint);
   font-size: 13px;
 }
-.sep {
-  width: 1px;
-  height: 12px;
-  background: var(--line);
-}
-.job-side {
-  flex: none;
-}
-.job-cta {
-  color: var(--ink-soft);
-  font-size: 14px;
-  font-weight: 600;
-  white-space: nowrap;
-  transition: color 0.2s ease;
-}
-.job-row:hover .job-cta {
-  color: var(--brand);
-}
 
-/* ===== 页脚 ===== */
-.foot {
-  margin-top: 72px;
-}
-.foot-line {
-  height: 1px;
-  background: var(--line);
-  margin-bottom: 22px;
-}
-.foot-row {
+/* ===== CTA ===== */
+.home-cta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 24px;
   flex-wrap: wrap;
-  color: var(--ink-faint);
-  font-size: 13px;
-  padding-bottom: 24px;
-}
-.foot-brand {
+  padding: 30px 0;
+  border: none;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
   color: var(--ink);
-  font-weight: 600;
+  margin-bottom: 20px;
 }
-.foot-mail {
+.home-cta h2 {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.home-cta p {
+  margin: 0;
   color: var(--ink-soft);
-  transition: color 0.15s ease;
+  font-size: 14px;
 }
-.foot-mail:hover {
+.home-cta .btn-light {
+  background: transparent;
+  border: 1px solid var(--line);
   color: var(--brand);
 }
-
-.spinner {
-  display: inline-block;
-  width: 18px;
-  height: 18px;
-  margin-right: 8px;
-  border: 2px solid var(--line);
-  border-top-color: var(--brand);
-  border-radius: 50%;
-  vertical-align: middle;
-  animation: spin 0.8s linear infinite;
+.home-cta .btn-light:hover {
+  border-color: var(--brand);
+}
+.btn-light {
+  background: #fff;
+  color: var(--ink);
+}
+.btn-light:hover {
+  background: #f0f0f0;
 }
 
-@media (max-width: 920px) {
+@media (max-width: 960px) {
   .hero-inner {
     grid-template-columns: 1fr;
-    padding: 48px 24px 64px;
-    gap: 24px;
+    padding: 48px 24px 20px;
+    min-height: 0;
+    gap: 16px;
   }
   .hero-art {
     order: -1;
   }
-  .job-row {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 14px;
+  .hero-stats {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
   }
-  .section-title {
-    font-size: 24px;
+  .why-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .process-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  .process-step {
+    border-bottom: 1px solid var(--line);
+  }
+  .process-step:nth-child(2n) {
+    border-right: none;
+  }
+  .process-step:nth-last-child(-n + 2) {
+    border-bottom: none;
+  }
+}
+@media (max-width: 640px) {
+  .hero-inner {
+    padding: 36px 18px 12px;
+  }
+  .hero-title {
+    font-size: 38px;
+  }
+  .hero-stats {
+    padding: 0 18px;
+  }
+  .why-grid,
+  .faq-preview {
+    grid-template-columns: 1fr;
+  }
+  .process-grid {
+    grid-template-columns: 1fr;
+  }
+  .process-step {
+    border-right: none;
+    border-bottom: 1px solid var(--line);
+  }
+  .process-step:last-child {
+    border-bottom: none;
+  }
+  .home-cta {
+    padding: 24px 0;
+  }
+  .home-cta h2 {
+    font-size: 23px;
   }
 }
 </style>

@@ -5,6 +5,8 @@ export function loadEnvFile() {
     const candidates = [
         path.join(process.cwd(), '.env'),
         path.join(process.cwd(), 'server', '.env'),
+        // 受管部署的 cwd 是 server/，项目根目录的 .env 作为补充（gitignored）
+        path.join(process.cwd(), '..', '.env'),
     ];
     for (const file of candidates) {
         if (!fs.existsSync(file))

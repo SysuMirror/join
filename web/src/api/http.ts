@@ -10,6 +10,16 @@ function resolveBase(): string {
 const instance: AxiosInstance = axios.create({
   baseURL: resolveBase(),
   timeout: 60000,
+  withCredentials: true,
+})
+
+instance.interceptors.request.use((config) => {
+  const token = localStorage.getItem('join_session_token')
+  if (token) {
+    config.headers = config.headers || {}
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
 })
 
 instance.interceptors.response.use(
@@ -23,9 +33,15 @@ instance.interceptors.response.use(
   },
   (error) => {
     const status = error.response?.status
+    if (status === 401) {
+      // 旧 token 失效时清掉，避免继续遮挡 Cookie 会话
+      localStorage.removeItem('join_session_token')
+    }
     const body = error.response?.data
     const message = body?.message || error.message || '网络错误'
-    return Promise.reject(new Error(message))
+    const err = new Error(message) as Error & { status?: number }
+    err.status = status
+    return Promise.reject(err)
   },
 )
 

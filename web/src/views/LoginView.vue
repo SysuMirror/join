@@ -1,214 +1,215 @@
 <template>
-  <div class="page">
-    <div class="scene" aria-hidden="true">
-      <div class="grid" />
-    </div>
+  <div class="auth-page">
+    <RouterLink class="back-home" to="/">← 返回首页</RouterLink>
 
-    <div class="auth-wrap">
-      <RouterLink class="back-home" to="/">← 返回职位列表</RouterLink>
-
-      <div class="auth-card">
-        <div class="auth-head">
-          <img class="logo-img" src="/logo.png" alt="logo" />
-          <h1 class="auth-title">登录</h1>
-          <p class="auth-sub">使用管理员邮箱登录，管理招聘职位与投递审核。</p>
-        </div>
-
-        <form @submit.prevent="onLogin">
-          <div class="field">
-            <label>邮箱</label>
-            <input v-model="email" type="email" placeholder="you@example.com" required autocomplete="email" />
-          </div>
-
-          <div class="field">
-            <label>验证码</label>
-            <div class="code-row">
-              <input v-model="code" type="text" inputmode="numeric" maxlength="6" placeholder="6 位验证码" required />
-              <button type="button" class="btn btn-ghost code-btn" @click="sendCode" :disabled="sending || countdown > 0">
-                {{ countdown > 0 ? `${countdown}s` : '发送验证码' }}
-              </button>
-            </div>
-          </div>
-
-          <p v-if="notice" class="success">{{ notice }}</p>
-          <p v-if="error" class="error">{{ error }}</p>
-
-          <button class="btn btn-primary btn-block" type="submit" :disabled="busy || sending">
-            {{ busy ? '登录中…' : '登录' }}
-          </button>
-        </form>
-
-        <div class="sso-row">
-          <span class="sso-line" />
-          <span class="sso-text">或</span>
-          <span class="sso-line" />
-        </div>
-        <button class="btn btn-ghost btn-block" @click="ssoLogin" :disabled="!ssoEnabled">
-          使用集市账号登录（SSO）
-        </button>
+    <div class="auth-card">
+      <div class="auth-head">
+        <img class="logo-img" src="/logo.png" alt="logo" />
+        <span class="auth-brand">{{ site?.brand || '软工集市' }}</span>
+        <h1 class="auth-title">登录</h1>
+        <p class="auth-sub">使用集市统一身份登录。首次登录自动获得「软工集市开发者」身份，可投递部门、发起技术部答辩。</p>
       </div>
+
+      <p v-if="error" class="notice notice-error">{{ error }}</p>
+      <p v-else-if="notice" class="notice notice-success">{{ notice }}</p>
+
+      <button
+        class="btn btn-primary btn-lg btn-block sso-btn"
+        :disabled="ssoBusy || Boolean(site && !site.ssoEnabled)"
+        @click="ssoLogin"
+      >
+        <span class="sso-icon">↗</span>
+        {{ ssoBusy ? '正在跳转…' : '使用集市统一身份登录' }}
+      </button>
+      <p v-if="site && !site.ssoEnabled" class="sso-disabled">
+        统一身份登录尚未配置。请联系管理员在 UniSSO 注册应用后启用。
+      </p>
+      <p v-else class="sso-hint">将跳转到 sso.ssemarket.cn 完成授权，首次登录自动创建账号并授予开发者身份。</p>
+
+      <div class="divider">
+        <span class="divider-line" />
+        <button class="divider-toggle" type="button" @click="adminOpen = !adminOpen">
+          {{ adminOpen ? '收起管理员登录' : '管理员登录' }}
+        </button>
+        <span class="divider-line" />
+      </div>
+
+      <form v-if="adminOpen" class="admin-form" @submit.prevent="onLogin">
+        <div class="field">
+          <label>管理员邮箱</label>
+          <input
+            v-model="email"
+            type="email"
+            placeholder="you@example.com"
+            required
+            autocomplete="email"
+          />
+        </div>
+        <div class="field">
+          <label>密码</label>
+          <input
+            v-model="password"
+            type="password"
+            placeholder="账号密码"
+            required
+            autocomplete="current-password"
+          />
+        </div>
+        <p v-if="adminError" class="notice notice-error">{{ adminError }}</p>
+        <p v-if="adminNotice" class="notice notice-success">{{ adminNotice }}</p>
+        <button class="btn btn-primary btn-block" type="submit" :disabled="busy">
+          {{ busy ? '登录中…' : '登录管理后台' }}
+        </button>
+        <p class="admin-hint">仅限管理员白名单成员（院内账号）；报名同学请使用上方统一身份登录。</p>
+      </form>
+
+      <p class="auth-foot">
+        登录即表示同意我们根据部门双选与开发者管理需要处理你的简历信息。遇到问题可联系
+        <a :href="`mailto:${site?.contactEmail || 'ssemarket@163.com'}`">
+          {{ site?.contactEmail || 'ssemarket@163.com' }}
+        </a>
+      </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../api'
+import { useAuth } from '../stores/auth'
+import { useSiteStore } from '../stores/site'
 
+const route = useRoute()
 const router = useRouter()
-const email = ref(localStorage.getItem('join_login_email') || '')
-const code = ref('')
+const auth = useAuth()
+const siteState = useSiteStore().state
+const site = computed(() => siteState.site)
+
 const error = ref('')
 const notice = ref('')
-const sending = ref(false)
-const busy = ref(false)
-const countdown = ref(0)
-const ssoEnabled = ref(false)
-let timer: number | undefined
+const ssoBusy = ref(false)
 
-let auto = false
-async function attemptAutoLogin() {
-  if (auto) return
-  auto = true
-  try {
-    const token = localStorage.getItem('join_session_token')
-    if (token) {
-      const user = await api.me(token)
-      if (user?.is_admin) {
-        router.replace('/admin')
-        return
-      }
-    }
-  } catch {
-    /* not logged in */
-  } finally {
-    auto = false
-  }
+const adminOpen = ref(false)
+const email = ref(localStorage.getItem('join_login_email') || '')
+const password = ref('')
+const busy = ref(false)
+const adminError = ref('')
+const adminNotice = ref('')
+
+const redirect = computed(() => {
+  const r = route.query.redirect
+  return typeof r === 'string' && r.startsWith('/') && !r.startsWith('//') ? r : '/me'
+})
+
+function targetAfterLogin(isStaff: boolean): string {
+  if (route.query.redirect) return redirect.value
+  return isStaff ? '/admin' : '/me'
 }
 
-async function sendCode() {
+function ssoLogin() {
   error.value = ''
-  notice.value = ''
-  const e = email.value.trim()
-  if (!e) {
-    error.value = '请先输入邮箱'
+  if (site.value && !site.value.ssoEnabled) {
+    error.value = '统一身份登录尚未配置，请联系管理员'
     return
   }
-  sending.value = true
-  try {
-    await api.sendCode(e)
-    localStorage.setItem('join_login_email', e)
-    notice.value = '验证码已发送，请查收邮箱'
-    startCountdown()
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : '发送失败'
-  } finally {
-    sending.value = false
-  }
-}
-
-function startCountdown() {
-  countdown.value = 60
-  if (timer) window.clearInterval(timer)
-  timer = window.setInterval(() => {
-    countdown.value -= 1
-    if (countdown.value <= 0) window.clearInterval(timer)
-  }, 1000)
+  // 清除浏览器里可能残留的旧 Bearer token，确保 SSO Cookie 会话生效
+  localStorage.removeItem('join_session_token')
+  ssoBusy.value = true
+  window.location.href = api.ssoStartUrl(redirect.value)
 }
 
 async function onLogin() {
-  error.value = ''
-  notice.value = ''
+  adminError.value = ''
+  adminNotice.value = ''
   const e = email.value.trim()
-  const c = code.value.trim()
-  if (!e || !/^\d{6}$/.test(c)) {
-    error.value = '请输入邮箱与 6 位验证码'
+  const p = password.value
+  if (!e || !p) {
+    adminError.value = '请输入邮箱与密码'
     return
   }
   busy.value = true
   try {
-    const r = await api.login(e, c)
+    const r = await api.login(e, p)
     localStorage.setItem('join_session_token', r.token)
     localStorage.setItem('join_login_email', e)
-    if (r.user?.is_admin) router.replace('/admin')
-    else router.replace('/')
+    auth.setUser(r.user)
+    router.replace(targetAfterLogin(Boolean(r.user?.is_admin || r.user?.is_staff)))
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '登录失败'
+    adminError.value = e instanceof Error ? e.message : '登录失败'
   } finally {
     busy.value = false
   }
 }
 
-function ssoLogin() {
-  error.value = ssoEnabled.value ? '' : 'SSO 登录暂未启用，先使用邮箱验证码登录'
-}
-
-onMounted(attemptAutoLogin)
-onUnmounted(() => {
-  if (timer) window.clearInterval(timer)
+onMounted(async () => {
+  await useSiteStore().ensure(true)
+  const qError = route.query.error
+  if (typeof qError === 'string' && qError) error.value = qError
+  const user = await auth.ensure()
+  if (user) {
+    router.replace(targetAfterLogin(Boolean(user.is_admin || user.is_staff)))
+    return
+  }
+  // 静默 SSO：父域已有管理员登录态时直接进后台；无 Cookie / 非管理员 /
+  // 服务不可用都静默保持表单（probe 每次页面加载只跑一次）
+  const probe = await auth.probeSharedSso()
+  if (probe === 'ok') {
+    const u = auth.user.value
+    if (u) {
+      router.replace(targetAfterLogin(Boolean(u.is_admin || u.is_staff)))
+    }
+  }
 })
 </script>
 
 <style scoped>
-.page {
+.auth-page {
   position: relative;
   min-height: 100vh;
   display: grid;
   place-items: center;
-  padding: 24px;
+  padding: 48px 24px;
   background: var(--bg);
 }
-.scene {
+.back-home {
   position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  overflow: hidden;
+  top: 24px;
+  left: 24px;
+  z-index: 2;
+  color: var(--ink-soft);
+  font-size: 13px;
 }
-.grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(31, 35, 41, 0.028) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(31, 35, 41, 0.028) 1px, transparent 1px);
-  background-size: 72px 72px;
-  mask-image: radial-gradient(ellipse 80% 60% at 50% 40%, #000 10%, transparent 75%);
+.back-home:hover {
+  color: var(--ink);
 }
-
-.auth-wrap {
+.auth-card {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 400px;
-}
-.back-home {
-  display: inline-block;
-  color: var(--ink-soft);
-  font-size: 13px;
-  margin-bottom: 16px;
-  transition: color 0.15s ease;
-}
-.back-home:hover {
-  color: var(--brand);
-}
-.auth-card {
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lift);
-  padding: 36px;
-  animation: fadeUp 0.5s var(--ease);
+  max-width: 420px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0;
 }
 .auth-head {
-  margin-bottom: 22px;
+  margin-bottom: 24px;
 }
 .logo-img {
-  width: 44px;
-  height: 44px;
+  width: 40px;
+  height: 40px;
   object-fit: contain;
   display: block;
-  margin-bottom: 18px;
+  margin-bottom: 12px;
+}
+.auth-brand {
+  display: block;
+  color: var(--ink-faint);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
 }
 .auth-title {
   margin: 0 0 8px;
@@ -219,44 +220,69 @@ onUnmounted(() => {
 .auth-sub {
   margin: 0;
   color: var(--ink-soft);
-  font-size: 14px;
+  font-size: 13px;
+  line-height: 1.7;
+}
+.sso-btn {
+  margin-top: 18px;
+}
+.sso-icon {
+  font-size: 15px;
+}
+.sso-hint,
+.sso-disabled {
+  margin: 10px 0 0;
+  font-size: 12px;
   line-height: 1.6;
+  color: var(--ink-faint);
 }
-
-form {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 8px;
+.sso-disabled {
+  color: var(--ink-soft);
 }
-.code-row {
-  display: flex;
-  gap: 10px;
-}
-.code-row input {
-  flex: 1;
-}
-.code-btn {
-  flex: none;
-  min-width: 116px;
-}
-.btn-block {
-  width: 100%;
-}
-
-.sso-row {
+.divider {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 18px 0 12px;
-  color: var(--ink-faint);
+  margin: 22px 0 4px;
 }
-.sso-line {
+.divider-line {
   flex: 1;
   height: 1px;
   background: var(--line);
 }
-.sso-text {
+.divider-toggle {
+  border: none;
+  background: transparent;
+  color: var(--ink-faint);
   font-size: 12px;
+}
+.divider-toggle:hover {
+  color: var(--ink);
+}
+.admin-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 16px;
+}
+.admin-hint {
+  margin: 0;
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.6;
+}
+.auth-foot {
+  margin: 22px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 11px;
+  line-height: 1.7;
+}
+.auth-foot a {
+  color: var(--ink-soft);
+}
+.auth-foot a:hover {
+  color: var(--ink);
 }
 </style>

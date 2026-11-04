@@ -47,14 +47,14 @@ export async function sendVerifyCodeMail(to, code) {
         }
         return false;
     }
-    const subject = '【软工集市招聘】登录验证码';
+    const subject = '【软工集市】登录验证码';
     const text = [
         '你好，',
         '',
         `你的登录验证码是：${code}`,
         '验证码 5 分钟内有效。如非本人操作请忽略本邮件。',
         '',
-        '—— 软工集市 · 招聘',
+        '—— 软工集市',
     ].join('\n');
     await sendMail(to, subject, text);
     return true;

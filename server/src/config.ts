@@ -14,12 +14,25 @@ const dataDir =
   env('DATA_DIR') || env('JOIN_DATA_DIR') || path.join(process.cwd(), 'data')
 fs.mkdirSync(dataDir, { recursive: true })
 
+const publicBase = (env('PUBLIC_BASE') || env('JOIN_PUBLIC_URL', 'http://localhost:8080')).replace(
+  /\/$/,
+  '',
+)
+
 export const config = {
   port: Number(env('PORT', '8080')),
   dataDir,
-  /** 站点对外公网根（前端访问 / 邮件回跳 / 回调等场景用） */
-  publicBase: env('PUBLIC_BASE') || env('JOIN_PUBLIC_URL', 'http://localhost:8080').replace(/\/$/, ''),
+  /** 站点对外公网根（前端访问 / 邮件回跳 / OAuth redirect_uri 等场景用） */
+  publicBase,
   frontendDist: env('JOIN_FRONTEND_DIST') || path.join(process.cwd(), '../web/dist'),
+
+  /** 简历附件等用户上传文件（落在持久化盘，随 DATA_DIR 一起） */
+  uploads: {
+    maxResumeBytes:
+      Math.max(1, Number(env('JOIN_RESUME_MAX_MB', '10')) || 10) * 1024 * 1024,
+    /** PDF 最多解析页数，避免超长文档拖垮进程 */
+    maxPdfPages: Math.max(1, Number(env('JOIN_PDF_MAX_PAGES', '30')) || 30),
+  },
 
   /**
    * 对接开发者平台的「模块」身份（用于调用 /api/open/* 的 SM2 签名）。
@@ -33,57 +46,40 @@ export const config = {
     moduleSlug: env('JOIN_DEV_MODULE_SLUG'),
     /** 模块私钥（sm-crypto 64 hex；开发者平台注册模块时一次性下发，此后不落库） */
     modulePrivateKey: env('JOIN_DEV_MODULE_PRIVATE_KEY'),
-    /** 平台管理员查看录用单在开发者平台 OA 中流转，审批由平台侧管理员执行 */
   },
 
   /**
-   * 邮箱登录（验证码式）。
-   * 当前版实现「邮箱验证码登录」，并预留后续跳转 SSE Market SSO。
-   * SMTP 配置由部署平台环境变量注入（兼容 SMTP_ADDR / SMTP_HOST 两种风格），未配置时验证码不走邮箱。
+   * UniSSO（OAuth2 Authorization Code + PKCE S256 / OIDC）。
+   * 注册应用后由部署平台注入 UNISSO_CLIENT_ID / UNISSO_CLIENT_SECRET。
+   * redirect_uri 必须与 UniSSO 应用管理里登记的完全一致。
    */
-  mail: {
-    /** 用户是否允许用邮箱验证码登录；设为 false 则仅留 SSO 入口 */
-    enabled: env('JOIN_MAIL_LOGIN', 'true') === 'true',
-    /** 验证码有效期（秒） */
-    codeTtlSeconds: Number(env('JOIN_MAIL_CODE_TTL', '300')),
-    /** 同一邮箱发码最小间隔（秒），防轰炸 */
-    codeResendInterval: Number(env('JOIN_MAIL_CODE_RESEND', '60')),
+  unisso: {
+    issuer: (env('UNISSO_ISSUER', 'https://sso.ssemarket.cn') || 'https://sso.ssemarket.cn').replace(
+      /\/$/,
+      '',
+    ),
+    clientId: env('UNISSO_CLIENT_ID') || env('SSEAPI_OAUTH_APP_ID'),
+    clientSecret: env('UNISSO_CLIENT_SECRET') || env('SSEAPI_OAUTH_APP_SECRET'),
+    redirectUri:
+      env('UNISSO_REDIRECT_URI') || `${publicBase}/api/auth/sso/callback`,
+    scopes: env('UNISSO_SCOPES', 'openid profile email') || 'openid profile email',
+    /** 登录成功后跳转的前端默认路径 */
+    defaultReturnTo: env('UNISSO_DEFAULT_RETURN_TO', '/me'),
   },
 
-  /**
-   * SSE Market SSO（预留：后续跳转登录）。
-   * 现在未启用；届时配置 SSEAPI_OAUTH_* 并在 auth.ts 里实现 callback 即可。
-   */
-  sso: {
-    enabled: env('JOIN_SSO_ENABLED', 'false') === 'true',
-    baseUrl: env('SSEAPI_OAUTH_BASE_URL', 'https://ssemarket.cn/new').replace(/\/$/, ''),
-    apiBaseUrl: env('SSEAPI_OAUTH_API_BASE_URL', 'https://ssemarket.cn').replace(/\/$/, ''),
-    appId: env('SSEAPI_OAUTH_APP_ID', 'sse-join'),
-    appSecret: env('SSEAPI_OAUTH_APP_SECRET'),
-    redirectUri: env('SSEAPI_OAUTH_REDIRECT_URI') || `${env('PUBLIC_BASE') || 'http://localhost:8080'}/auth/sso/callback`,
-    scope: env('SSEAPI_OAUTH_SCOPE', 'read_basic'),
-  },
-
-  /** 登录会话 JWT 密钥（由部署平台注入的随机长字符串） */
+  /** 登录会话签名密钥（由部署平台注入的随机长字符串） */
   sessionSecret: env('JOIN_SESSION_SECRET'),
 
-  /** 管理端访问口令（无 SMTP/邮箱登录时的备选；管理页审核入口） */
-  adminToken: env('JOIN_ADMIN_TOKEN'),
+  /** 超级管理员 UniSSO sub 白名单（逗号分隔；站点配置 adminSubs 会合并进来） */
+  adminSubs: env('JOIN_ADMIN_SUBS'),
+}
+
+/** UniSSO 是否已配置（缺 client_id / client_secret 时登录页会提示未启用） */
+export function isUnissoConfigured(): boolean {
+  return Boolean(config.unisso.clientId && config.unisso.clientSecret)
 }
 
 /** 用于 fail-fast 启动校验 */
 export function isDevPlatformConfigured(): boolean {
   return Boolean(config.devPlatform.moduleSlug && config.devPlatform.modulePrivateKey)
-}
-
-/** 邮箱登录是否可用（开启且配置了 SMTP 才能收到验证码；JOIN_MAIL_DEBUG=true 时本地联调允许无 SMTP） */
-export function isMailLoginUsable(): boolean {
-  if (!config.mail.enabled) return false
-  if (!config.sessionSecret) return false
-  if (process.env.JOIN_MAIL_DEBUG === 'true') return true
-  return Boolean(process.env.SMTP_HOST || process.env.SMTP_ADDR)
-}
-
-export function isAdminConfigured(): boolean {
-  return Boolean(config.adminToken)
 }
