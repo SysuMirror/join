@@ -1,16 +1,16 @@
 export const TYPE_LABELS: Record<string, string> = {
-  fulltime: '社团成员',
+  fulltime: '团队成员',
   intern: '项目成员',
-  parttime: '志愿者',
+  // 旧数据兼容：历史 parttime 不再新增，展示为团队成员
+  parttime: '团队成员',
 }
 
 export function typeLabel(t: string): string {
-  return TYPE_LABELS[t] || t || '社团成员'
+  return TYPE_LABELS[t] || t || '团队成员'
 }
 
 export function typeClass(t: string): string {
   if (t === 'intern') return 'badge-green'
-  if (t === 'parttime') return 'badge-amber'
   return 'badge-blue'
 }
 
@@ -65,7 +65,7 @@ export function levelLabel(l: string): string {
     {
       market: '集市开发者',
       project: '项目开发者',
-      roundtable: '圆桌开发者',
+      roundtable: '技术部成员',
     } as Record<string, string>
   )[l] || '集市开发者'
 }

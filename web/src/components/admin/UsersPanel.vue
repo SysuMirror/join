@@ -73,6 +73,7 @@
               <span v-if="u.is_department_admin" class="badge badge-blue">部门管理员</span>
               <span v-if="u.is_resource_reviewer" class="badge badge-green">资源方代表</span>
               <span v-if="u.head_departments.length" class="badge badge">负责人</span>
+              <span v-if="u.sso_developer" class="badge badge-green">开发者权限</span>
               <span v-if="!u.is_super_admin && !u.is_department_admin && !u.is_resource_reviewer" class="muted small">普通开发者</span>
             </div>
           </td>

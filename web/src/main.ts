@@ -3,6 +3,11 @@ import App from './App.vue'
 import router from './router'
 import './styles/main.css'
 
+// 刷新时不要由浏览器恢复上一次的滚动位置，统一交给路由回到顶部
+if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+  window.history.scrollRestoration = 'manual'
+}
+
 const app = createApp(App)
 
 /**

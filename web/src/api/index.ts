@@ -19,6 +19,9 @@ export interface SiteConfig {
   tagline: string
   contactEmail: string
   bgWords: string
+  teamTitle?: string
+  teamIntro?: string
+  teamHighlights?: string
   adminSubs?: string
   updatedAt: string
   stats?: SiteStats
@@ -32,8 +35,10 @@ export interface Department {
   summary: string
   description: string
   color: string
-  /** 部门管理员邮箱（逗号分隔） */
+  /** 部门管理员邮箱（逗号分隔；旧数据兼容，界面不再使用） */
   admin_emails?: string
+  admin_user_ids?: string
+  adminUsers?: Array<{ id: number; name: string; email: string }>
   openJobs?: number
   directions?: string[]
   enabled?: number
@@ -86,6 +91,8 @@ export interface Job {
   salary: string
   /** 咨询微信（可选） */
   contact_wechat: string
+  /** 常驻招聘：报名信息完整时自动通过 */
+  auto_approve?: boolean
   tags: string[]
   summary: string
   responsibilities: string
@@ -130,6 +137,184 @@ export interface JobMeta {
   }>
 }
 
+export interface HistoryChapter {
+  id: number
+  kicker: string
+  title: string
+  summary: string
+  era: string
+  content: string
+  sort_order: number
+  enabled: number
+  created_at: string
+  updated_at: string
+}
+
+export interface HallOfFameMember {
+  id: number
+  /** 关联的系统注册用户 id */
+  user_id: number
+  name: string
+  avatar: string
+  title: string
+  department: string
+  year: string
+  quote: string
+  bio: string
+  achievements: string
+  /** 1 = 本人通过邀请填写；寄语/自我介绍对管理员锁定 */
+  user_submitted: number
+  market_url: string
+  contact_email: string
+  contact_wechat: string
+  contact_other: string
+  sort_order: number
+  enabled: number
+  created_at: string
+  updated_at: string
+}
+
+export interface HallUserSummary {
+  id: number
+  name: string
+  email: string
+  avatar: string
+  developer_no: string
+  developer_level: DeveloperLevel
+  sso_sub?: string
+}
+
+export interface AdminHallOfFameMember extends HallOfFameMember {
+  /** 管理员自定义头像；空字符串表示跟随系统用户头像 */
+  custom_avatar: string
+  user: HallUserSummary | null
+}
+
+export interface HistorySettings {
+  title: string
+  subtitle: string
+  hall_title: string
+  hall_intro: string
+  updated_at?: string
+}
+
+export interface HistoryDocument {
+  settings: HistorySettings
+  chapters: HistoryChapter[]
+  hallOfFame: HallOfFameMember[]
+  updatedAt: string
+}
+
+export interface HallInvite {
+  id: number
+  user_id: number
+  token: string
+  department: string
+  title: string
+  status: 'pending' | 'submitted' | 'revoked'
+  expires_at: string
+  created_by: string
+  created_at: string
+  sent_at: string
+  submitted_at: string
+}
+
+export interface AdminHallInvite extends HallInvite {
+  expired: boolean
+  link: string
+  user: {
+    id: number
+    name: string
+    email: string
+    avatar: string
+    developer_no: string
+  } | null
+}
+
+export interface AdminHistoryMeta {
+  departments: string[]
+  mailConfigured: boolean
+}
+
+export interface SsoUserSummary {
+  /** 已在本平台注册时返回本地用户 id；未注册为 0 */
+  user_id: number
+  sso_sub: string
+  name: string
+  email: string
+  avatar: string
+  developer_no: string
+  student_id: string
+  internal: boolean
+  active: boolean
+  registered: boolean
+}
+
+export interface SsoUserDirectory {
+  users: SsoUserSummary[]
+  ssoAvailable: boolean
+  warning: string
+  cachedAt?: string
+  stale?: boolean
+}
+
+/** 后台用户目录（SSO 缓存 + 本地账号合并） */
+export interface DirectoryUser {
+  user_id: number
+  sso_sub: string
+  name: string
+  email: string
+  avatar: string
+  developer_no: string
+  developer_level: DeveloperLevel
+  student_id: string
+  internal: boolean
+  active: boolean
+  registered: boolean
+}
+
+export interface DirectoryPage {
+  users: DirectoryUser[]
+  cachedAt: string
+  stale: boolean
+  warning: string
+}
+
+export interface BatchInviteResult {
+  results: Array<{
+    ok: boolean
+    index: number
+    user?: { id: number; name: string; email: string }
+    auto_created?: boolean
+    invite?: AdminHallInvite
+    link?: string
+    emailSent?: boolean
+    error?: string
+  }>
+  success: number
+  failed: number
+  emailSent: number
+}
+
+export interface HallInviteInfo {
+  invite: {
+    token: string
+    department: string
+    title: string
+    status: HallInvite['status']
+    expires_at: string
+  }
+  user: {
+    id: number
+    name: string
+    email: string
+    avatar: string
+    developer_no: string
+  }
+  entry: HallOfFameMember | null
+  departments: string[]
+}
+
 export interface Faq {
   id: number
   category: string
@@ -149,6 +334,8 @@ export interface Resume {
   email: string
   city: string
   intention: string
+  /** 年级（大一/大二/…） */
+  grade: string
   education: string
   school: string
   major: string
@@ -164,6 +351,9 @@ export interface Resume {
   has_file: boolean
   parse_note: string
   parsed_text?: string
+  /** 基本信息/联系方式/教育/经历是否达到自动通过要求 */
+  complete?: boolean
+  missing_fields?: string[]
   is_default: boolean
   created_at: string
   updated_at: string
@@ -176,6 +366,7 @@ export interface ResumeSnapshot {
   email?: string
   city?: string
   intention?: string
+  grade?: string
   education?: string
   school?: string
   major?: string
@@ -269,6 +460,9 @@ export interface DeveloperIdentity {
   developer_bio: string
   developer_skills: string[]
   developer_links: string[]
+  /** 是否已同步 UniSSO 的开发者权限 */
+  sso_developer?: boolean
+  sso_developer_at?: string
   system_role: 'user' | 'super_admin'
   reviewer_role: '' | 'resource'
   is_super_admin: boolean
@@ -515,6 +709,7 @@ export interface AdminSession {
     roundtable: boolean
     faqs: boolean
     site: boolean
+    history: boolean
     jobs: boolean
     applications: boolean
   }
@@ -556,6 +751,22 @@ export interface MeOverview {
   rejected: number
 }
 
+export interface JoinTeamStatus {
+  ready: boolean
+  resume_id: number
+  missing_fields: string[]
+  sso_developer: boolean
+  sso_developer_at: string
+  email: string
+}
+
+export interface JoinTeamResult {
+  developer: boolean
+  identity: DeveloperIdentity
+  resume_id: number
+  sso_developer_at: string
+}
+
 function qs(params: Record<string, unknown>): string {
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
@@ -574,10 +785,18 @@ export const api = {
   department: (slug: string) => http.get<Department>(`api/departments/${encodeURIComponent(slug)}`),
   jobs: (params: Record<string, unknown> = {}) => http.get<Job[]>(`api/jobs${qs(params)}`),
   jobMeta: () => http.get<JobMeta>('api/jobs/meta'),
-  job: (slug: string) => http.get<Job>(`api/jobs/${encodeURIComponent(slug)}`),
+  job: (key: string | number) => http.get<Job>(`api/jobs/${encodeURIComponent(String(key))}`),
   faqs: (params: Record<string, unknown> = {}) => http.get<Faq[]>(`api/faqs${qs(params)}`),
-  apply: (slug: string, body: { resume_id: number; note?: string; wechat?: string }) =>
-    http.post(`api/jobs/${encodeURIComponent(slug)}/apply`, body),
+  history: () => http.get<HistoryDocument>('api/history'),
+  hallInvite: (token: string) =>
+    http.get<HallInviteInfo>(`api/history/invite/${encodeURIComponent(token)}`),
+  submitHallInvite: (token: string, body: Record<string, unknown>) =>
+    http.post<{ entry: HallOfFameMember; message: string }>(
+      `api/history/invite/${encodeURIComponent(token)}`,
+      body,
+    ),
+  apply: (key: string | number, body: { resume_id: number; note?: string; wechat?: string }) =>
+    http.post(`api/jobs/${encodeURIComponent(String(key))}/apply`, body),
   health: () => http.get<any>('api/health'),
 
   // ===== 管理体系公开数据 =====
@@ -603,6 +822,9 @@ export const api = {
   // ===== 个人中心 / 开发者身份 =====
   myOverview: () => http.get<MeOverview>('api/me/overview'),
   myDeveloper: () => http.get<MyDeveloperProfile>('api/me/developer'),
+  myJoinTeamStatus: () => http.get<JoinTeamStatus>('api/me/join-team'),
+  joinTeam: (body: { resume_id?: number } = {}) =>
+    http.post<JoinTeamResult>('api/me/join-team', body, { timeout: 30_000 }),
   myDefenses: () => http.get<Defense[]>('api/me/defenses'),
   myDefense: (id: number) => http.get<Defense>(`api/me/defenses/${id}`),
   createDefense: (body: { title?: string; statement: string; proposal: string; achievements?: string }) =>
@@ -634,6 +856,10 @@ export const api = {
   // ===== 管理端 =====
   adminMe: () => http.get<AdminSession>('api/admin/me'),
   adminStats: () => http.get<AdminStats>('api/admin/stats'),
+  adminDirectoryUsers: (params: Record<string, unknown> = {}) =>
+    http.get<DirectoryPage>(`api/admin/directory/users${qs(params)}`),
+  adminRefreshDirectory: () =>
+    http.post<{ cachedAt: string; total: number }>('api/admin/directory/refresh', {}),
   adminSite: () => http.get<SiteConfig>('api/admin/site'),
   adminUpdateSite: (body: Partial<SiteConfig>) => http.put<SiteConfig>('api/admin/site', body),
 
@@ -726,6 +952,48 @@ export const api = {
       {},
       { timeout: 30_000 },
     ),
+
+  // ===== 集市历史 / 名人堂 =====
+  adminHistoryMeta: () => http.get<AdminHistoryMeta>('api/admin/history/meta'),
+  adminHistorySettings: () => http.get<HistorySettings>('api/admin/history/settings'),
+  adminUpdateHistorySettings: (body: Partial<HistorySettings>) =>
+    http.put<HistorySettings>('api/admin/history/settings', body),
+  adminHistoryChapters: () => http.get<HistoryChapter[]>('api/admin/history/chapters'),
+  adminCreateHistoryChapter: (body: Record<string, unknown>) =>
+    http.post<HistoryChapter>('api/admin/history/chapters', body),
+  adminUpdateHistoryChapter: (id: number, body: Record<string, unknown>) =>
+    http.put<HistoryChapter>(`api/admin/history/chapters/${id}`, body),
+  adminDeleteHistoryChapter: (id: number) =>
+    http.delete(`api/admin/history/chapters/${id}`),
+  adminHallOfFame: () => http.get<AdminHallOfFameMember[]>('api/admin/history/hall'),
+  adminCreateHallOfFame: (body: Record<string, unknown>) =>
+    http.post<AdminHallOfFameMember>('api/admin/history/hall', body),
+  adminUpdateHallOfFame: (id: number, body: Record<string, unknown>) =>
+    http.put<AdminHallOfFameMember>(`api/admin/history/hall/${id}`, body),
+  adminDeleteHallOfFame: (id: number) => http.delete(`api/admin/history/hall/${id}`),
+  adminReorderHall: (ids: number[]) =>
+    http.post<AdminHallOfFameMember[]>('api/admin/history/hall/reorder', { ids }),
+  adminHistorySsoUsers: (q = '') =>
+    http.get<SsoUserDirectory>(`api/admin/history/sso-users${qs({ q })}`),
+  adminHallInvites: () => http.get<AdminHallInvite[]>('api/admin/history/invites'),
+  adminCreateHallInvite: (body: Record<string, unknown>) =>
+    http.post<{ invite: AdminHallInvite; link: string; emailSent: boolean }>(
+      'api/admin/history/invites',
+      body,
+      { timeout: 30_000 },
+    ),
+  adminCreateHallInvitesBatch: (body: Record<string, unknown>) =>
+    http.post<BatchInviteResult>('api/admin/history/invites/batch', body, {
+      timeout: 120_000,
+    }),
+  adminResendHallInvite: (id: number) =>
+    http.post<{ invite: AdminHallInvite; link: string; emailSent: boolean }>(
+      `api/admin/history/invites/${id}/resend`,
+      {},
+      { timeout: 30_000 },
+    ),
+  adminRevokeHallInvite: (id: number) =>
+    http.delete<AdminHallInvite>(`api/admin/history/invites/${id}`),
 
   adminFaqs: () => http.get<Faq[]>('api/admin/faqs'),
   adminCreateFaq: (body: Record<string, unknown>) => http.post<Faq>('api/admin/faqs', body),

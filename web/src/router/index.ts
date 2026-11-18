@@ -5,10 +5,17 @@ const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   scrollBehavior(to, from, saved) {
     if (saved) return saved
-    if (to.hash) return { el: to.hash, behavior: 'smooth' }
-    // 同一页面上仅 query 变化（筛选）时不回顶
-    if (to.path === from.path) return false
-    return { top: 0 }
+    // 只有页面上确实存在该锚点时才滚动，避免旧链接（如 /#team）刷新后乱跳
+    if (
+      to.hash &&
+      typeof document !== 'undefined' &&
+      document.querySelector(to.hash)
+    ) {
+      return { el: to.hash, behavior: 'smooth' }
+    }
+    // 同一页面上仅 query 变化（筛选）时不回顶；首次加载/刷新必须回顶
+    if (from.name && to.path === from.path) return false
+    return { top: 0, left: 0 }
   },
   routes: [
     {
@@ -22,9 +29,24 @@ const router = createRouter({
       component: () => import('../views/JobsView.vue'),
     },
     {
+      path: '/join-team',
+      name: 'join-team',
+      component: () => import('../views/JoinTeamView.vue'),
+    },
+    {
       path: '/jobs/:slug',
       name: 'job-detail',
       component: () => import('../views/JobDetailView.vue'),
+    },
+    {
+      path: '/history',
+      name: 'history',
+      component: () => import('../views/HistoryView.vue'),
+    },
+    {
+      path: '/hall-invite/:token',
+      name: 'hall-invite',
+      component: () => import('../views/HallInviteView.vue'),
     },
     {
       path: '/faq',
@@ -98,18 +120,16 @@ const router = createRouter({
 router.beforeEach(async (to) => {
   if (!to.meta.requiresAuth && !to.meta.requiresAdmin) return true
   const auth = useAuth()
-  const user = await auth.ensure()
 
-  // 单点登出：父域 sse_sso 失效（401）且本地是 staff 会话 → 本地会话一起失效。
-  // 候选人（非 staff）与 401 无关（join 的静默端点只放行管理员），保留其会话；
-  // 503 / 网络（UniSSO 不可达）保留一切本地会话，不踢人。probe 每次页面加载只跑一次。
-  const probe = await auth.probeSharedSso()
-  if (probe === 'expired' && user && (user.is_admin || user.is_staff)) {
-    auth.clearLocal()
-    return { path: '/login', query: { redirect: to.fullPath } }
+  // 本地会话（SSO 回调种下的 HttpOnly join_session Cookie）是权威登录态。
+  // 静默 SSO 探测只用于「尚未登录时」的冷启动尝试：它打的是父域共享 Cookie 的
+  // session/verify，可能在 SSO 刚授权、切换联动账号、或中继抖动时短暂返回 401。
+  // 绝不能因为一次探测失败就清掉刚刚建立的本地会话（否则表现为授权后必须刷新）。
+  let current = await auth.ensure()
+  if (!current) {
+    const probe = await auth.probeSharedSso()
+    current = probe === 'ok' ? auth.user.value : null
   }
-
-  const current = probe === 'ok' ? auth.user.value : user
   if (!current) {
     return { path: '/login', query: { redirect: to.fullPath } }
   }

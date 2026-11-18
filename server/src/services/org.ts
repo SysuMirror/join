@@ -193,7 +193,7 @@ export function userIdentityView(user: UserRow) {
     developer_level: user.developer_level,
     level_label:
       user.developer_level === 'roundtable'
-        ? '圆桌开发者'
+        ? '技术部成员'
         : user.developer_level === 'project'
           ? '项目开发者'
           : '集市开发者',
@@ -206,6 +206,8 @@ export function userIdentityView(user: UserRow) {
     developer_bio: user.developer_bio,
     developer_skills: (user.developer_skills || '').split(',').map((x) => x.trim()).filter(Boolean),
     developer_links: (user.developer_links || '').split(',').map((x) => x.trim()).filter(Boolean),
+    sso_developer: user.sso_developer === 1,
+    sso_developer_at: user.sso_developer_at || '',
     system_role: isSuperAdminUser(user) ? 'super_admin' : 'user',
     reviewer_role: user.reviewer_role,
     is_super_admin: isSuperAdminUser(user),
@@ -353,6 +355,10 @@ export function mergeUserRows(canonical: UserRow, duplicate: UserRow): void {
   canonical.developer_bio = canonical.developer_bio || duplicate.developer_bio
   canonical.developer_skills = mergeCsv(canonical.developer_skills, duplicate.developer_skills)
   canonical.developer_links = mergeCsv(canonical.developer_links, duplicate.developer_links)
+  if (duplicate.sso_developer === 1) {
+    canonical.sso_developer = 1
+    canonical.sso_developer_at = duplicate.sso_developer_at || canonical.sso_developer_at
+  }
   if (duplicate.provider === 'sso') canonical.provider = 'sso'
   if (duplicate.last_login_at > canonical.last_login_at) {
     canonical.last_login_at = duplicate.last_login_at

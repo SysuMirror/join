@@ -1,3 +1,4 @@
+import '../polyfills.js'
 import path from 'node:path'
 import { createRequire } from 'node:module'
 import { config } from '../config.js'

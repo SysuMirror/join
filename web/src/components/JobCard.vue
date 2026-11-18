@@ -1,9 +1,10 @@
 <template>
-  <RouterLink :to="`/jobs/${job.slug}`" class="job-card">
+  <RouterLink :to="`/jobs/${job.id}`" class="job-card">
     <div class="job-card-main">
       <div class="job-card-title-row">
         <h3 class="job-card-title">{{ job.title }}</h3>
         <span class="badge" :class="typeClass(job.type)">{{ typeLabel(job.type) }}</span>
+        <span v-if="job.auto_approve" class="badge badge-amber">常驻 · 自动通过</span>
       </div>
       <p v-if="job.summary" class="job-card-summary">{{ job.summary }}</p>
       <div class="job-card-meta">

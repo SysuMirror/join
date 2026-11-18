@@ -11,6 +11,7 @@
 
       <div class="footer-links">
         <RouterLink to="/jobs">部门岗位</RouterLink>
+        <RouterLink to="/history">团队故事</RouterLink>
         <RouterLink to="/faq">常见问题</RouterLink>
         <a href="https://ssemarket.cn" target="_blank" rel="noopener">集市主页 ↗</a>
       </div>

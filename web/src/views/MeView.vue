@@ -18,11 +18,7 @@
             </div>
           </div>
         </div>
-        <div class="me-head-actions">
-          <RouterLink v-if="isStaff" class="btn btn-ghost btn-sm" to="/admin">管理后台</RouterLink>
-          <RouterLink class="btn btn-ghost btn-sm" to="/jobs">浏览岗位</RouterLink>
         </div>
-      </div>
 
       <div v-if="overview" class="me-summary">
         <span>累计报名 <b>{{ overview.applications }}</b></span>
@@ -56,9 +52,8 @@
               <div class="row-between content-head">
                 <div>
                   <h2 class="content-title">开发者身份</h2>
-                  <p class="content-sub">从集市开发者到项目开发者，再到圆桌开发者（技术部）。</p>
+                  <p class="content-sub">你的身份、所在部门与参与记录。</p>
                 </div>
-                <RouterLink class="btn btn-ghost btn-sm" to="/teams">查看公示 →</RouterLink>
               </div>
 
               <div v-if="developer" class="identity-card">
@@ -77,29 +72,10 @@
                 </div>
 
                 <div class="level-track">
-                  <div v-for="(l, i) in ['集市开发者', '项目开发者', '圆桌开发者']" :key="l" class="track-step" :class="{ done: progressStep > i, current: progressStep === i + 1 }">
+                  <div v-for="(l, i) in ['集市开发者', '项目开发者', '技术部成员']" :key="l" class="track-step" :class="{ done: progressStep > i, current: progressStep === i + 1 }">
                     <span class="track-dot" />
                     <b>{{ l }}</b>
-                    <span class="track-desc">{{ ['注册即获得', '部门双选确认', '多级答辩通过'][i] }}</span>
-                  </div>
-                </div>
-
-                <div class="identity-stats">
-                  <div>
-                    <b>{{ developer.department?.name || '尚未进组' }}</b>
-                    <span>所属部门</span>
-                  </div>
-                  <div>
-                    <b>{{ developer.seat ? `${developer.seat.occupied}/${developer.seat.total}` : '—' }}</b>
-                    <span>部门圆桌席位</span>
-                  </div>
-                  <div>
-                    <b>{{ developer.seat?.available ?? '—' }}</b>
-                    <span>可用席位</span>
-                  </div>
-                  <div>
-                    <b>{{ developer.defenses.length }}</b>
-                    <span>答辩次数</span>
+                    <span class="track-desc">{{ ['登录即获得', '加入部门', '技术部成员'][i] }}</span>
                   </div>
                 </div>
 
@@ -113,20 +89,17 @@
                   <RouterLink v-else-if="developer.developer_level === 'market'" class="btn btn-primary" to="/jobs">
                     投递意向部门
                   </RouterLink>
-                  <RouterLink v-else-if="developer.developer_level === 'roundtable'" class="btn btn-ghost" to="/teams">
-                    查看圆桌
-                  </RouterLink>
-                </div>
+                                  </div>
 
                 <p class="identity-hint">
                   <template v-if="developer.developer_level === 'market'">
-                    你已拥有「集市开发者」身份。在部门岗位投递意向部门，通过 15 分钟轻沟通并双向确认后成为项目开发者；之后本页会出现「发起技术部答辩」按钮。
+                    在部门岗位投递感兴趣的部门，双方确认后即可加入。
                   </template>
                   <template v-else-if="developer.developer_level === 'project'">
-                    你已是项目开发者。可发起技术部答辩：准备个人陈述与「如何帮助学院更好分配资源」的具体主张。
+                    你已加入部门，可以在项目里持续参与。
                   </template>
                   <template v-else>
-                    你是圆桌开发者（技术部成员）。年度复审未达产出要求或卸任产品负责人时，会自动退出圆桌并释放席位。
+                    你是技术部成员，参与部门与资源相关的讨论。
                   </template>
                 </p>
               </div>
@@ -176,71 +149,115 @@
                 <RouterLink class="btn btn-ghost btn-sm" to="/jobs">继续报名 →</RouterLink>
               </div>
 
-              <div v-if="!applications.length" class="empty-card">
+              <div v-if="!applications.length" class="empty-card app-empty">
                 <h3>还没有报名记录</h3>
                 <p>浏览部门岗位，找到合适的方向后提交第一份报名。</p>
-                <RouterLink class="btn btn-primary" to="/jobs">去看看岗位</RouterLink>
               </div>
 
-              <div v-else class="app-list">
-                <article v-for="a in applications" :key="a.id" class="app-card">
-                  <div class="app-head">
-                    <div class="app-main">
-                      <RouterLink class="app-title" :to="`/jobs/${a.jobSlug}`">
-                        {{ a.jobTitle || '岗位已关闭' }}
-                      </RouterLink>
-                      <p class="app-meta">
-                        {{ a.department || '—' }}
-                        <span class="dot-sep" />
-                        {{ a.location || '—' }}
-                        <span class="dot-sep" />
-                        报名于 {{ formatDate(a.created_at) }}
-                      </p>
-                    </div>
-                    <span class="badge" :class="stageClass(a.stage)">{{ stageLabel(a.stage) }}</span>
+              <div v-else class="app-groups">
+                <section v-for="group in applicationGroups" :key="group.key" class="app-group">
+                  <div class="app-group-head">
+                    <h3>{{ group.title }}</h3>
+                    <span v-if="group.key === 'active'" class="app-group-count">{{ group.items.length }}</span>
                   </div>
 
-                  <div class="app-sub">
-                    <span class="app-resume">简历：{{ a.resume_title || '—' }}</span>
-                    <span v-if="a.wechat" class="app-resume">微信：{{ a.wechat }}</span>
-                    <span v-if="a.interview_at" class="app-resume">沟通时间：{{ formatDateTime(a.interview_at) }}</span>
+                  <div class="app-table-head">
+                    <span>职位</span>
+                    <span>所属部门</span>
+                    <span>申请日期</span>
+                    <span>申请编号</span>
+                    <span>当前状态</span>
+                    <span />
                   </div>
 
-                  <p v-if="a.interview_note" class="app-note">沟通记录：{{ a.interview_note }}</p>
-                  <p v-if="a.review_note" class="app-note">审核意见：{{ a.review_note }}</p>
-                  <p v-if="a.note" class="app-note">补充说明：{{ a.note }}</p>
-
-                  <div v-if="a.stage === 'offered'" class="offer-box">
-                    <div>
-                      <b>部门已通过，等待你确认</b>
-                      <p class="small muted">确认后你将加入「{{ a.department }}」，身份转为项目开发者。双向确认后才会进组。</p>
-                    </div>
-                    <button class="btn btn-primary btn-sm" :disabled="confirmBusy === a.id" @click="confirmApplication(a)">
-                      {{ confirmBusy === a.id ? '确认中…' : '确认加入' }}
-                    </button>
-                  </div>
-
-                  <button
-                    v-if="a.oa_timeline?.length"
-                    class="app-timeline-toggle"
-                    @click="toggleTimeline(a.id)"
-                  >
-                    {{ expandedApp === a.id ? '收起审批进度' : `查看审批进度（${a.oa_timeline.length}）` }}
-                  </button>
-                  <ol v-if="expandedApp === a.id" class="timeline">
-                    <li v-for="(e, i) in a.oa_timeline" :key="i" class="tl-item">
-                      <span class="tl-dot" :class="`dot-${e.action}`" />
-                      <div>
-                        <div class="tl-head">
-                          <strong>{{ actionLabel(e.action) }}</strong>
-                          <span class="muted small">{{ e.by || e.viaModule || '' }}</span>
-                        </div>
-                        <div v-if="e.note" class="small">{{ e.note }}</div>
-                        <div class="muted small">{{ formatDateTime(e.at) }}</div>
+                  <article v-for="a in group.items" :key="a.id" class="app-row">
+                    <div class="app-row-main">
+                      <div class="app-job-cell">
+                        <RouterLink class="app-title" :to="`/jobs/${a.job_id}`">
+                          {{ a.jobTitle || '岗位已关闭' }}
+                        </RouterLink>
+                        <span class="app-resume">{{ a.resume_title || '未关联简历' }}</span>
                       </div>
-                    </li>
-                  </ol>
-                </article>
+                      <div class="app-dept-cell">{{ a.department || '—' }}</div>
+                      <div class="app-date-cell">{{ formatDate(a.created_at) }}</div>
+                      <div class="app-no-cell mono">{{ appNo(a) }}</div>
+                      <div class="app-status-cell">
+                        <span class="badge" :class="stageClass(a.stage)">{{ stageLabel(a.stage) }}</span>
+                      </div>
+                      <div class="app-action-cell">
+                        <button
+                          v-if="a.stage === 'offered'"
+                          class="btn btn-primary btn-sm"
+                          :disabled="confirmBusy === a.id"
+                          @click="confirmApplication(a)"
+                        >
+                          {{ confirmBusy === a.id ? '确认中…' : '确认加入' }}
+                        </button>
+                        <RouterLink
+                          v-else-if="a.stage !== 'rejected' && a.stage !== 'withdrawn'"
+                          class="app-link"
+                          :to="`/jobs/${a.job_id}`"
+                        >
+                          查看岗位
+                        </RouterLink>
+                      </div>
+                    </div>
+
+                    <div class="app-progress" :class="{ failed: isAppFailed(a.stage) }">
+                      <div class="progress-track">
+                        <span class="progress-fill" :style="{ width: appProgress(a.stage) }" />
+                      </div>
+                      <div class="progress-steps">
+                        <div
+                          v-for="(step, i) in progressSteps"
+                          :key="step"
+                          class="progress-step"
+                          :class="appStepClass(a.stage, i)"
+                        >
+                          <span class="progress-dot" />
+                          <span class="progress-label">{{ step }}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <p v-if="a.stage === 'offered'" class="app-offer-hint">
+                      部门已通过，确认后你将加入「{{ a.department }}」。
+                    </p>
+                    <p v-if="isAppFailed(a.stage)" class="app-failed">
+                      {{ a.stage === 'withdrawn' ? '你已撤回本次报名' : a.review_note || '本次报名未匹配' }}
+                    </p>
+
+                    <div class="app-sub">
+                      <span v-if="a.wechat" class="app-resume">微信：{{ a.wechat }}</span>
+                      <span v-if="a.interview_at" class="app-resume">沟通时间：{{ formatDateTime(a.interview_at) }}</span>
+                    </div>
+
+                    <p v-if="a.interview_note" class="app-note">沟通记录：{{ a.interview_note }}</p>
+                    <p v-if="a.review_note && !isAppFailed(a.stage)" class="app-note">审核意见：{{ a.review_note }}</p>
+                    <p v-if="a.note" class="app-note">补充说明：{{ a.note }}</p>
+
+                    <button
+                      v-if="a.oa_timeline?.length"
+                      class="app-timeline-toggle"
+                      @click="toggleTimeline(a.id)"
+                    >
+                      {{ expandedApp === a.id ? '收起审批进度' : `查看审批进度（${a.oa_timeline.length}）` }}
+                    </button>
+                    <ol v-if="expandedApp === a.id" class="timeline">
+                      <li v-for="(e, i) in a.oa_timeline" :key="i" class="tl-item">
+                        <span class="tl-dot" :class="`dot-${e.action}`" />
+                        <div>
+                          <div class="tl-head">
+                            <strong>{{ actionLabel(e.action) }}</strong>
+                            <span class="muted small">{{ e.by || e.viaModule || '' }}</span>
+                          </div>
+                          <div v-if="e.note" class="small">{{ e.note }}</div>
+                          <div class="muted small">{{ formatDateTime(e.at) }}</div>
+                        </div>
+                      </li>
+                    </ol>
+                  </article>
+                </section>
               </div>
             </div>
 
@@ -266,10 +283,6 @@
               <div v-if="!resumes.length" class="empty-card">
                 <h3>还没有简历</h3>
                 <p>上传 PDF 自动解析，或手动在线填写。创建后即可报名岗位。</p>
-                <div class="empty-actions">
-                  <button class="btn btn-primary" :disabled="uploadBusy" @click="triggerUpload">上传 PDF</button>
-                  <RouterLink class="btn btn-ghost" to="/me/resumes/new">在线填写</RouterLink>
-                </div>
               </div>
 
               <div v-else class="resume-list">
@@ -278,18 +291,22 @@
                     <div class="resume-title-row">
                       <h3 class="resume-title">{{ r.title }}</h3>
                       <span v-if="r.is_default" class="badge badge-blue">默认</span>
+                      <span v-if="r.complete === false" class="badge badge-amber">待完善</span>
                     </div>
                     <span v-if="r.has_file" class="resume-file">PDF · {{ fileSize(r.file_size) }}</span>
                   </div>
                   <p class="resume-meta">
                     {{ r.name || '未填写姓名' }}
                     <span class="dot-sep" />
-                    {{ r.phone || r.email || '未填写联系方式' }}
-                    <span v-if="r.education || r.school" class="dot-sep" />
-                    <span v-if="r.education || r.school">{{ [r.education, r.school].filter(Boolean).join(' · ') }}</span>
+                    {{ r.grade || r.education || '年级未填' }}
+                    <span class="dot-sep" />
+                    {{ r.email || r.phone || '未填写联系方式' }}
                   </p>
                   <p v-if="r.summary || r.skills" class="resume-summary">
                     {{ r.summary || r.skills }}
+                  </p>
+                  <p v-if="r.missing_fields?.length" class="muted small resume-missing">
+                    还差：{{ r.missing_fields.join('、') }}
                   </p>
                   <p v-if="r.parse_note" class="notice notice-info resume-note">{{ r.parse_note }}</p>
                   <div class="resume-actions">
@@ -316,6 +333,15 @@
                   <div><dt>邮箱</dt><dd>{{ user?.email || '未返回' }}</dd></div>
                   <div><dt>登录方式</dt><dd>{{ user?.provider === 'sso' ? '集市统一身份（UniSSO）' : '管理员邮箱验证码' }}</dd></div>
                   <div><dt>身份类型</dt><dd>{{ user?.internal ? '院内用户' : '院外用户' }}</dd></div>
+                  <div>
+                    <dt>开发者权限</dt>
+                    <dd>
+                      {{ user?.sso_developer ? '已同步到统一身份' : '未开通' }}
+                      <RouterLink v-if="!user?.sso_developer" class="inline-action" to="/join-team">
+                        去开通
+                      </RouterLink>
+                    </dd>
+                  </div>
                   <div v-if="user?.roles?.length"><dt>角色</dt><dd>{{ user.roles.join('、') }}</dd></div>
                   <div v-if="user?.admin_departments?.length">
                     <dt>管理部门</dt>
@@ -390,6 +416,48 @@ const uploadError = ref('')
 const uploadNotice = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
 const expandedApp = ref<number | null>(null)
+
+const progressSteps = ['已投递', '沟通', '部门通过', '已加入']
+const ACTIVE_STAGES: Application['stage'][] = ['submitted', 'interview', 'offered']
+
+const applicationGroups = computed(() => {
+  const active = applications.value.filter((a) => ACTIVE_STAGES.includes(a.stage))
+  const completed = applications.value.filter((a) => !ACTIVE_STAGES.includes(a.stage))
+  return [
+    { key: 'active', title: '进行中', items: active },
+    { key: 'done', title: '已完成流程', items: completed },
+  ].filter((g) => g.items.length > 0)
+})
+
+function appStepIndex(stage: Application['stage']): number {
+  if (stage === 'interview') return 1
+  if (stage === 'offered') return 2
+  if (stage === 'joined') return 3
+  return 0
+}
+
+function isAppFailed(stage: Application['stage']): boolean {
+  return stage === 'rejected' || stage === 'withdrawn'
+}
+
+function appProgress(stage: Application['stage']): string {
+  if (stage === 'joined') return '100%'
+  if (isAppFailed(stage)) return '0%'
+  return `${(appStepIndex(stage) / (progressSteps.length - 1)) * 100}%`
+}
+
+function appStepClass(stage: Application['stage'], i: number): string {
+  if (isAppFailed(stage)) return i === 0 ? 'done failed' : ''
+  if (stage === 'joined') return 'done'
+  const idx = appStepIndex(stage)
+  if (i < idx) return 'done'
+  if (i === idx) return 'current'
+  return ''
+}
+
+function appNo(a: Application): string {
+  return `SSE-A-${String(a.id).padStart(4, '0')}`
+}
 
 const initial = computed(() => (user.value?.name || user.value?.email || '?').slice(0, 1).toUpperCase())
 
@@ -712,42 +780,182 @@ watch(
 }
 
 /* 报名 */
-.app-list {
+.app-empty p {
+  margin-bottom: 0;
+}
+.app-groups {
   display: flex;
   flex-direction: column;
-  gap: 0;
+  gap: 34px;
 }
-.app-card {
-  padding: 18px 0;
-  border: none;
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-}
-.app-head {
+.app-group-head {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 10px;
 }
-.app-main {
+.app-group-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+.app-group-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  background: var(--input-bg);
+  color: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 700;
+}
+.app-table-head {
+  display: grid;
+  grid-template-columns: 2.2fr 1.2fr 1fr 1.1fr 1fr 96px;
+  gap: 16px;
+  padding: 0 0 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+.app-row {
+  padding: 16px 0 18px;
+  border-bottom: 1px solid var(--line);
+}
+.app-row-main {
+  display: grid;
+  grid-template-columns: 2.2fr 1.2fr 1fr 1.1fr 1fr 96px;
+  gap: 16px;
+  align-items: center;
+}
+.app-job-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
   min-width: 0;
 }
 .app-title {
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  color: var(--brand);
 }
 .app-title:hover {
   color: var(--ink);
 }
-.app-meta {
-  margin: 6px 0 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+.app-resume {
   color: var(--ink-faint);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.app-dept-cell,
+.app-date-cell,
+.app-no-cell {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink-soft);
+  font-size: 12px;
+}
+.app-no-cell {
+  font-size: 11px;
+}
+.app-action-cell {
+  text-align: right;
+}
+.app-link {
+  color: var(--ink-soft);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.app-link:hover {
+  color: var(--ink);
+}
+
+/* 横向流程 */
+.app-progress {
+  position: relative;
+  margin-top: 16px;
+  padding-top: 16px;
+}
+.progress-track {
+  position: absolute;
+  top: 4px;
+  left: 5px;
+  right: calc(25% - 5px);
+  height: 2px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+.progress-fill {
+  display: block;
+  height: 100%;
+  background: var(--brand);
+  transition: width 0.3s var(--ease);
+}
+.progress-steps {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+}
+.progress-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.progress-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #d4d4d4;
+  position: relative;
+  z-index: 1;
+}
+.progress-label {
+  color: var(--ink-faint);
+  font-size: 11px;
+  white-space: nowrap;
+}
+.progress-step.done .progress-dot,
+.progress-step.current .progress-dot {
+  background: var(--brand);
+}
+.progress-step.current .progress-dot {
+  box-shadow: 0 0 0 4px var(--brand-soft);
+}
+.progress-step.done .progress-label {
+  color: var(--ink-soft);
+}
+.progress-step.current .progress-label {
+  color: var(--ink);
+  font-weight: 600;
+}
+.app-progress.failed .progress-step.done .progress-dot {
+  background: #8a4a42;
+}
+.app-progress.failed .progress-fill {
+  background: #8a4a42;
+}
+.app-progress.failed .progress-step.done .progress-label {
+  color: #8a4a42;
+}
+.app-offer-hint {
+  margin: 12px 0 0;
+  color: #3f6b50;
+  font-size: 12px;
+}
+.app-failed {
+  margin: 12px 0 0;
+  color: #8a4a42;
   font-size: 12px;
 }
 .app-sub {
@@ -758,10 +966,6 @@ watch(
   margin-top: 14px;
   padding-top: 14px;
   border-top: 1px solid var(--line-soft);
-}
-.app-resume {
-  color: var(--ink-soft);
-  font-size: 12px;
 }
 .app-note {
   margin: 10px 0 0;
@@ -874,7 +1078,8 @@ watch(
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.resume-note {
+.resume-note,
+.resume-missing {
   margin-top: 10px;
 }
 .resume-actions {
@@ -906,6 +1111,13 @@ watch(
 }
 .account-list dd {
   margin: 0;
+}
+.inline-action {
+  margin-left: 8px;
+  color: var(--brand);
+  font-size: 12px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .account-actions {
   display: flex;
@@ -1058,27 +1270,6 @@ watch(
 .defense-note {
   max-width: 620px;
 }
-.offer-box {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-top: 12px;
-  padding: 12px 0;
-  border: none;
-  border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
-  border-radius: 0;
-  background: transparent;
-}
-.offer-box b {
-  font-size: 13px;
-}
-.offer-box p {
-  margin: 3px 0 0;
-}
-
 @media (max-width: 900px) {
   .me-layout {
     grid-template-columns: 1fr;
@@ -1088,6 +1279,48 @@ watch(
     position: static;
     flex-direction: row;
     flex-wrap: wrap;
+  }
+  .app-table-head {
+    display: none;
+  }
+  .app-row-main {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px 16px;
+  }
+  .app-job-cell {
+    grid-column: 1 / -1;
+  }
+  .app-dept-cell::before {
+    content: '部门：';
+    color: var(--ink-faint);
+  }
+  .app-date-cell::before {
+    content: '申请：';
+    color: var(--ink-faint);
+  }
+  .app-no-cell::before {
+    content: '编号：';
+    color: var(--ink-faint);
+  }
+  .app-action-cell {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+  .progress-label {
+    font-size: 10px;
+  }
+}
+@media (max-width: 560px) {
+  .app-row-main {
+    grid-template-columns: 1fr;
+  }
+  .app-dept-cell,
+  .app-date-cell,
+  .app-no-cell {
+    display: none;
+  }
+  .progress-label {
+    white-space: normal;
   }
 }
 </style>

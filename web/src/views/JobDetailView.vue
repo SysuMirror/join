@@ -20,6 +20,7 @@
         <header class="job-head">
           <div class="job-badges">
             <span class="badge" :class="typeClass(job.type)">{{ typeLabel(job.type) }}</span>
+            <span v-if="job.auto_approve" class="badge badge-amber">常驻招聘 · 自动通过</span>
             <span v-if="job.direction" class="badge badge-blue">{{ job.direction }}</span>
             <span v-if="job.updatedAt" class="job-updated">更新于 {{ formatDate(job.updatedAt) }}</span>
           </div>
@@ -104,7 +105,7 @@
               </div>
 
               <template v-if="applied">
-                <p class="notice notice-success">已报名成功，可在「我的报名」查看进度。</p>
+                <p class="notice notice-success">{{ applySuccess || '已报名成功，可在「我的报名」查看进度。' }}</p>
                 <RouterLink class="btn btn-ghost btn-block" to="/me?tab=applications">
                   查看我的报名 →
                 </RouterLink>
@@ -131,6 +132,16 @@
                   <RouterLink to="/me?tab=resumes" class="inline-link">管理简历</RouterLink>
                 </p>
               </template>
+
+              <p v-if="job.auto_approve" class="apply-hint auto-hint">
+                常驻招聘：简历信息完整时，报名后自动通过并加入部门。
+              </p>
+              <p
+                v-if="job.auto_approve && defaultResume && defaultResume.complete === false"
+                class="apply-hint auto-hint"
+              >
+                当前默认简历还差：{{ (defaultResume.missing_fields || []).join('、') }}，补全后即可自动通过。
+              </p>
 
               <div class="apply-divider" />
               <ul class="apply-facts">
@@ -212,7 +223,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api, type Application, type Job, type Resume } from '../api'
 import JobCard from '../components/JobCard.vue'
 import SiteHeader from '../components/SiteHeader.vue'
@@ -222,6 +233,7 @@ import { useSiteStore } from '../stores/site'
 import { formatDate, typeClass, typeLabel } from '../utils/labels'
 
 const route = useRoute()
+const router = useRouter()
 const auth = useAuth()
 const authState = auth.state
 
@@ -237,6 +249,7 @@ const applyWechat = ref('')
 const applying = ref(false)
 const applyError = ref('')
 const applied = ref(false)
+const applySuccess = ref('')
 const copied = ref(false)
 const wechatCopied = ref(false)
 
@@ -252,10 +265,10 @@ const resumeNewTo = computed(() => ({
 const responsibilities = computed(
   () => job.value?.responsibilities || job.value?.description || '',
 )
-const defaultResumeTitle = computed(() => {
-  const r = resumes.value.find((x) => x.is_default) || resumes.value[0]
-  return r?.title || '我的简历'
-})
+const defaultResume = computed(
+  () => resumes.value.find((x) => x.is_default) || resumes.value[0] || null,
+)
+const defaultResumeTitle = computed(() => defaultResume.value?.title || '我的简历')
 
 async function load() {
   loading.value = true
@@ -263,6 +276,10 @@ async function load() {
   try {
     await Promise.all([useSiteStore().ensure(), auth.ensure()])
     job.value = await api.job(slug.value)
+    // 统一使用数字 ID 作为岗位 URL，旧 slug 链接自动跳转
+    if (route.params.slug !== String(job.value.id)) {
+      router.replace(`/jobs/${job.value.id}`)
+    }
     if (authState.user) {
       const [rs, apps] = await Promise.all([
         api.myResumes().catch(() => [] as Resume[]),
@@ -311,12 +328,13 @@ async function submitApply() {
   applying.value = true
   applyError.value = ''
   try {
-    await api.apply(slug.value, {
+    const res = (await api.apply(slug.value, {
       resume_id: applyResumeId.value,
       note: applyNote.value.trim(),
       wechat: applyWechat.value.trim(),
-    })
+    })) as { message?: string; auto_approved?: boolean }
     applied.value = true
+    applySuccess.value = res?.message || ''
     applyOpen.value = false
   } catch (e) {
     applyError.value = e instanceof Error ? e.message : '报名失败'
@@ -341,6 +359,7 @@ watch(
   (v, old) => {
     if (v && v !== old) {
       applied.value = false
+      applySuccess.value = ''
       load()
     }
   },
@@ -532,6 +551,9 @@ watch(
   color: var(--ink-faint);
   font-size: 12px;
   line-height: 1.6;
+}
+.auto-hint {
+  color: #7a5a2e;
 }
 .inline-link {
   color: var(--ink);

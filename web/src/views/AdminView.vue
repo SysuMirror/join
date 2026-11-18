@@ -5,8 +5,8 @@
     <main class="admin-main">
       <header class="admin-head">
         <div>
-          <h1 class="page-title">开发者与人事管理</h1>
-          <p class="page-sub">管理部门与岗位、双选报名、成员权限、技术部答辩、圆桌席位与年度复审。</p>
+          <h1 class="page-title">招聘与成员管理</h1>
+          <p class="page-sub">发布岗位、处理报名、维护成员权限与站点文案。</p>
         </div>
         <div v-if="user" class="admin-user">
           <span v-if="adminMe" class="badge" :class="isGlobal ? 'badge-amber' : 'badge-blue'">
@@ -81,14 +81,11 @@
             <div class="card panel">
               <h3>快捷操作</h3>
               <div class="quick-actions">
-                <button v-if="isGlobal" class="quick-btn" @click="tab = 'publicities'"><b>+ 创建公示</b><span>记录本次会议的席位、指标与晋升</span></button>
-                <button v-if="isGlobal" class="quick-btn" @click="tab = 'users'"><b>成员与权限</b><span>查询用户、设置超管 / 部门管理员 / 负责人</span></button>
-                <button class="quick-btn" @click="tab = 'defenses'"><b>答辩评审</b><span>处理待评审答辩、查看多级流水线</span></button>
-                <button class="quick-btn" @click="openJobForm()"><b>+ 新建岗位</b><span>在部门下发布岗位</span></button>
+                <button class="quick-btn" @click="openJobForm()"><b>+ 新建岗位</b><span>发布部门岗位或常驻招聘</span></button>
+                <button class="quick-btn" @click="tab = 'applications'"><b>处理报名</b><span>查看报名同学与双选进度</span></button>
+                <button v-if="isGlobal" class="quick-btn" @click="tab = 'users'"><b>成员与权限</b><span>设置部门管理员与负责人</span></button>
                 <button v-if="isGlobal" class="quick-btn" @click="openDeptForm()"><b>+ 新建部门</b><span>创建集市下的项目部门</span></button>
-                <button class="quick-btn" @click="tab = 'applications'"><b>查看待初审报名</b><span>处理报名同学简历与审批</span></button>
-                <button v-if="isGlobal" class="quick-btn" @click="openFaqForm()"><b>+ 新增问答</b><span>补充报名同学常见问题</span></button>
-                <button v-if="isGlobal" class="quick-btn" @click="tab = 'site'"><b>编辑站点文案</b><span>首页标题、公告与联系方式</span></button>
+                <button v-if="isGlobal" class="quick-btn" @click="tab = 'site'"><b>编辑首页文案</b><span>标题、团队介绍与公告</span></button>
               </div>
             </div>
           </div>
@@ -148,6 +145,7 @@
               <tr v-for="j in jobs" :key="j.id">
                 <td>
                   <strong>{{ j.title }}</strong>
+                  <span v-if="j.auto_approve" class="badge badge-amber job-auto-badge">常驻 · 自动通过</span>
                   <div class="muted small">{{ j.slug }} · {{ j.location || '地点未填' }}</div>
                   <div v-if="j.contact_wechat" class="muted small">微信：{{ j.contact_wechat }}</div>
                 </td>
@@ -296,6 +294,11 @@
           <div v-else class="empty">暂无问答</div>
         </section>
 
+        <!-- ===== 历史与名人堂 ===== -->
+        <section v-if="tab === 'history'" class="admin-section">
+          <HistoryPanel @notice="showNotice" @error="setError" />
+        </section>
+
         <!-- ===== 站点配置 ===== -->
         <section v-show="tab === 'site'" class="card panel admin-section">
           <div class="row-between">
@@ -304,7 +307,7 @@
               {{ siteSaving ? '保存中…' : '保存配置' }}
             </button>
           </div>
-          <p class="hint">保存后前台即时生效。</p>
+          <p class="hint">保存后前台即时生效。留空的区块不会显示。</p>
           <div class="fields">
             <div class="field">
               <label>品牌名</label>
@@ -315,30 +318,57 @@
               <input v-model="siteForm.contactEmail" maxlength="120" />
             </div>
             <div class="field full">
-              <label>管理员 UniSSO sub（逗号分隔，登记后可用邮箱密码登录后台）</label>
-              <input v-model="siteForm.adminSubs" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
-            </div>
-            <div class="field full">
               <label>首页主标题</label>
               <input v-model="siteForm.heroTitle" maxlength="120" />
             </div>
             <div class="field full">
-              <label>首页副标题（换行用 \n）</label>
+              <label>首页副标题（每行一段）</label>
               <textarea v-model="siteForm.heroSubtitle" rows="3" />
-            </div>
-            <div class="field full">
-              <label>顶部公告（留空则不显示）</label>
-              <input v-model="siteForm.announcement" maxlength="120" />
             </div>
             <div class="field full">
               <label>页脚标语</label>
               <input v-model="siteForm.tagline" maxlength="120" />
             </div>
+          </div>
+
+          <div class="form-section-title site-block-title">首页团队介绍</div>
+          <p class="hint">团队介绍与亮点留空时，首页不会渲染对应区块。</p>
+          <div class="fields">
             <div class="field full">
-              <label>背景装饰词（用 · 分隔）</label>
-              <input v-model="siteForm.bgWords" maxlength="300" />
+              <label>介绍标题</label>
+              <input v-model="siteForm.teamTitle" maxlength="80" placeholder="如：关于我们" />
+            </div>
+            <div class="field full">
+              <label>介绍正文（支持 Markdown）</label>
+              <textarea
+                v-model="siteForm.teamIntro"
+                rows="6"
+                placeholder="介绍我们是谁、在做什么、希望遇到什么样的伙伴。留空则不显示。"
+              />
+            </div>
+            <div class="field full">
+              <label>团队亮点（每行一条，留空则不显示）</label>
+              <textarea
+                v-model="siteForm.teamHighlights"
+                rows="4"
+                placeholder="做真实项目&#10;扁平协作&#10;一起成长"
+              />
             </div>
           </div>
+
+          <details class="site-advanced">
+            <summary>高级设置</summary>
+            <div class="fields">
+              <div class="field full">
+                <label>管理员 UniSSO sub（逗号分隔）</label>
+                <input v-model="siteForm.adminSubs" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" />
+              </div>
+              <div class="field full">
+                <label>背景装饰词（用 · 分隔）</label>
+                <input v-model="siteForm.bgWords" maxlength="300" />
+              </div>
+            </div>
+          </details>
         </section>
       </template>
     </main>
@@ -361,24 +391,14 @@
             <textarea v-model="deptForm.description" rows="4" placeholder="部门职责、方向与团队情况" />
           </div>
           <div class="field full">
-            <label>部门管理员邮箱（旧数据兼容）</label>
-            <input v-model="deptForm.admin_emails" placeholder="alice@example.com,bob@example.com" />
-            <span class="hint">推荐在「成员与权限」中按用户设置部门管理员；这里仅用于兼容旧数据，保存用户角色后会自动清理多余邮箱。</span>
-          </div>
-          <div class="field">
-            <label>部门负责人</label>
-            <select v-model.number="deptForm.head_user_id">
-              <option :value="0">未设置</option>
-              <option v-for="u in headOptions" :key="u.id" :value="u.id">
-                {{ u.name }}（{{ u.developer_no }}）
-              </option>
-            </select>
-            <span class="hint">负责人是一级答辩「陈述事实」的评审人，自动获得部门管理员权限。</span>
+            <label>部门管理员</label>
+            <UserMultiPicker v-model="deptAdmins" placeholder="搜索并选择部门管理员…" />
+            <span class="hint">部门管理员可管理本部门的岗位、报名与成员。</span>
           </div>
           <div class="field full">
-            <p class="hint">
-              席位、产出指标与产出说明由「公示」发布维护，发布后自动写回部门；这里不能直接修改。
-            </p>
+            <label>部门负责人</label>
+            <UserPicker v-model="deptHead" placeholder="搜索并选择负责人…" />
+            <span class="hint">负责人自动获得该部门管理员权限。</span>
           </div>
           <div class="field">
             <label>排序（小在前）</label>
@@ -400,14 +420,32 @@
       </form>
     </div>
 
-    <!-- ===== 岗位弹窗 ===== -->
+    <!-- ===== 岗位弹窗（分 3 步） ===== -->
     <div v-if="jobModalOpen" class="modal-backdrop" @click.self="jobModalOpen = false">
-      <form class="modal wide" @submit.prevent="saveJob">
-        <h3>{{ editingJob ? '编辑岗位' : '新建岗位' }}</h3>
-        <div class="fields">
-          <div class="field">
+      <form class="modal wide job-modal" @submit.prevent="jobPrimary">
+        <div class="modal-head-row">
+          <h3>{{ editingJob ? '编辑岗位' : '新建岗位' }}</h3>
+          <span class="muted small">第 {{ jobStep }} / 3 步</span>
+        </div>
+
+        <nav class="step-nav">
+          <button
+            v-for="(label, i) in jobSteps"
+            :key="label"
+            type="button"
+            class="step-tab"
+            :class="{ active: jobStep === i + 1, done: jobStep > i + 1 }"
+            @click="jobStep = i + 1"
+          >
+            <span class="step-num">{{ i + 1 }}</span>
+            <span>{{ label }}</span>
+          </button>
+        </nav>
+
+        <div v-show="jobStep === 1" class="fields">
+          <div class="field full">
             <label>岗位名称 *</label>
-            <input v-model="jobForm.title" required maxlength="100" />
+            <input v-model="jobForm.title" required maxlength="100" placeholder="如：Agent 开发工程师" />
           </div>
           <div class="field">
             <label>所属部门 *</label>
@@ -417,45 +455,25 @@
             </select>
           </div>
           <div class="field">
-            <label>岗位方向</label>
-            <input v-model="jobForm.direction" list="direction-options" maxlength="40" placeholder="如：技术研发" />
-            <datalist id="direction-options">
-              <option v-for="d in directionOptions" :key="d" :value="d" />
-            </datalist>
-          </div>
-          <div class="field">
-            <label>活动地点</label>
-            <input v-model="jobForm.location" maxlength="60" placeholder="如：广州校区 / 线上" />
-          </div>
-          <div class="field">
             <label>参与类型</label>
             <select v-model="jobForm.type">
-              <option value="fulltime">社团成员</option>
+              <option value="fulltime">团队成员</option>
               <option value="intern">项目成员</option>
-              <option value="parttime">志愿者</option>
             </select>
           </div>
           <div class="field">
-            <label>招募对象</label>
-            <input v-model="jobForm.experience" list="experience-options" maxlength="40" />
-            <datalist id="experience-options">
-              <option v-for="e in experienceOptions" :key="e" :value="e" />
-            </datalist>
+            <label>岗位方向</label>
+            <select v-model="jobForm.direction">
+              <option value="">请选择</option>
+              <option v-for="d in optionList(directionOptions, jobForm.direction)" :key="d" :value="d">{{ d }}</option>
+            </select>
           </div>
           <div class="field">
-            <label>年级要求</label>
-            <input v-model="jobForm.education" list="education-options" maxlength="40" />
-            <datalist id="education-options">
-              <option v-for="e in educationOptions" :key="e" :value="e" />
-            </datalist>
-          </div>
-          <div class="field">
-            <label>时间投入</label>
-            <input v-model="jobForm.salary" maxlength="60" placeholder="如：每周 4-6 小时 / 时间灵活" />
-          </div>
-          <div class="field">
-            <label>咨询微信（选填）</label>
-            <input v-model="jobForm.contact_wechat" maxlength="60" placeholder="微信号 / 手机号，展示在岗位详情" />
+            <label>活动地点</label>
+            <select v-model="jobForm.location">
+              <option value="">请选择</option>
+              <option v-for="l in optionList(locationOptions, jobForm.location)" :key="l" :value="l">{{ l }}</option>
+            </select>
           </div>
           <div class="field">
             <label>招募人数（0 = 不限）</label>
@@ -464,6 +482,61 @@
           <div class="field">
             <label>标签（逗号分隔）</label>
             <input v-model="jobForm.tags" maxlength="300" placeholder="TypeScript,Node.js,大模型" />
+          </div>
+        </div>
+
+        <div v-show="jobStep === 2" class="fields">
+          <div class="field full">
+            <label>岗位摘要</label>
+            <textarea v-model="jobForm.summary" rows="2" maxlength="300" placeholder="列表页展示的一句话介绍" />
+          </div>
+          <div class="field full">
+            <label>岗位职责</label>
+            <textarea v-model="jobForm.responsibilities" rows="5" placeholder="你加入后会参与什么" />
+          </div>
+          <div class="field full">
+            <label>招募要求</label>
+            <textarea v-model="jobForm.requirements" rows="5" placeholder="我们希望你具备什么" />
+          </div>
+          <div class="field full">
+            <label>加分项（选填）</label>
+            <textarea v-model="jobForm.bonus" rows="3" />
+          </div>
+        </div>
+
+        <div v-show="jobStep === 3" class="fields">
+          <div class="field">
+            <label>招募对象</label>
+            <select v-model="jobForm.experience">
+              <option v-for="e in optionList(experienceOptions, jobForm.experience)" :key="e" :value="e">{{ e }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>年级要求</label>
+            <select v-model="jobForm.education">
+              <option v-for="e in optionList(educationOptions, jobForm.education)" :key="e" :value="e">{{ e }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>时间投入</label>
+            <select v-model="jobForm.salary">
+              <option value="">未填写</option>
+              <option v-for="c in optionList(commitmentOptions, jobForm.salary)" :key="c" :value="c">{{ c }}</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>咨询微信（选填）</label>
+            <input v-model="jobForm.contact_wechat" maxlength="60" placeholder="微信号 / 手机号" />
+          </div>
+          <div class="field full">
+            <label>招聘类型</label>
+            <select v-model.number="jobForm.auto_approve">
+              <option :value="0">普通招聘（人工处理报名）</option>
+              <option :value="1">常驻招聘 · 报名自动通过</option>
+            </select>
+            <span v-if="jobForm.auto_approve" class="hint">
+              简历信息完整（姓名、联系方式、教育背景、技能或项目经历）时，报名后自动通过并加入部门。
+            </span>
           </div>
           <div class="field">
             <label>开放报名</label>
@@ -476,30 +549,14 @@
             <label>排序（小在前）</label>
             <input v-model.number="jobForm.sort_order" type="number" />
           </div>
-          <div class="field full">
-            <label>岗位摘要</label>
-            <textarea v-model="jobForm.summary" rows="2" maxlength="300" placeholder="列表页展示的一句话介绍" />
-          </div>
-          <div class="field full">
-            <label>岗位职责</label>
-            <textarea v-model="jobForm.responsibilities" rows="5" />
-          </div>
-          <div class="field full">
-            <label>招募要求</label>
-            <textarea v-model="jobForm.requirements" rows="5" />
-          </div>
-          <div class="field full">
-            <label>加分项（选填）</label>
-            <textarea v-model="jobForm.bonus" rows="3" />
-          </div>
-          <div class="field full">
-            <label>其他描述（选填，旧数据兼容）</label>
-            <textarea v-model="jobForm.description" rows="3" />
-          </div>
         </div>
+
         <p v-if="modalError" class="notice notice-error">{{ modalError }}</p>
         <div class="modal-actions">
-          <button class="btn btn-primary" type="submit" :disabled="saving">保存</button>
+          <button v-if="jobStep > 1" class="btn btn-ghost" type="button" @click="jobStep -= 1">上一步</button>
+          <button class="btn btn-primary" type="submit" :disabled="saving">
+            {{ jobStep < 3 ? '下一步' : saving ? '保存中…' : editingJob ? '保存修改' : '创建岗位' }}
+          </button>
           <button class="btn btn-ghost" type="button" @click="jobModalOpen = false">取消</button>
         </div>
       </form>
@@ -555,7 +612,7 @@
 
           <section class="detail-block">
             <h4>报名同学信息</h4>
-            <p v-if="snapshotLine"><span class="detail-label">教育：</span>{{ snapshotLine }}</p>
+            <p v-if="snapshotLine"><span class="detail-label">年级 / 教育：</span>{{ snapshotLine }}</p>
             <p v-if="appDetail.snapshot?.intention"><span class="detail-label">意向：</span>{{ appDetail.snapshot.intention }}</p>
             <p v-if="appDetail.snapshot?.skills"><span class="detail-label">技能：</span>{{ appDetail.snapshot.skills }}</p>
             <p v-if="appDetail.snapshot?.summary"><span class="detail-label">自述：</span>{{ appDetail.snapshot.summary }}</p>
@@ -658,15 +715,19 @@ import {
   type AdminStats,
   type Department,
   type Faq,
+  type HallUserSummary,
   type JobType,
   type SiteConfig,
 } from '../api'
 import SiteHeader from '../components/SiteHeader.vue'
 import UsersPanel from '../components/admin/UsersPanel.vue'
+import UserPicker from '../components/admin/UserPicker.vue'
+import UserMultiPicker from '../components/admin/UserMultiPicker.vue'
 import DefensesPanel from '../components/admin/DefensesPanel.vue'
 import RoundtablePanel from '../components/admin/RoundtablePanel.vue'
 import PublicityPanel from '../components/admin/PublicityPanel.vue'
 import DepartmentIntroPanel from '../components/admin/DepartmentIntroPanel.vue'
+import HistoryPanel from '../components/admin/HistoryPanel.vue'
 import { useAuth } from '../stores/auth'
 import {
   actionLabel,
@@ -688,6 +749,7 @@ type AdminTab =
   | 'publicities'
   | 'department-intro'
   | 'faqs'
+  | 'history'
   | 'site'
 
 type DeptForm = {
@@ -695,7 +757,6 @@ type DeptForm = {
   summary: string
   description: string
   color: string
-  admin_emails: string
   head_user_id: number
   base_seats: number
   floating_seats: number
@@ -706,13 +767,6 @@ type DeptForm = {
   output_note: string
   enabled: number
   sort_order: number
-}
-
-type HeadOption = {
-  id: number
-  name: string
-  developer_no: string
-  developer_level: string
 }
 
 type JobForm = {
@@ -730,8 +784,8 @@ type JobForm = {
   responsibilities: string
   requirements: string
   bonus: string
-  description: string
   headcount: number
+  auto_approve: number
   enabled: number
   sort_order: number
 }
@@ -749,16 +803,17 @@ const user = auth.user
 
 const tabs: Array<{ id: AdminTab; label: string }> = [
   { id: 'overview', label: '概览' },
-  { id: 'users', label: '成员与权限' },
-  { id: 'departments', label: '部门' },
   { id: 'jobs', label: '岗位' },
   { id: 'applications', label: '报名' },
+  { id: 'users', label: '成员与权限' },
+  { id: 'departments', label: '部门' },
+  { id: 'site', label: '首页文案' },
+  { id: 'faqs', label: '问答' },
+  { id: 'department-intro', label: '部门介绍' },
   { id: 'defenses', label: '答辩' },
   { id: 'roundtable', label: '圆桌与复审' },
   { id: 'publicities', label: '公示' },
-  { id: 'department-intro', label: '部门介绍' },
-  { id: 'faqs', label: '问答' },
-  { id: 'site', label: '站点配置' },
+  { id: 'history', label: '年鉴与名人堂' },
 ]
 
 const tab = ref<AdminTab>('overview')
@@ -782,20 +837,23 @@ const faqs = ref<Faq[]>([])
 const jobsFilter = reactive({ q: '', department: '' })
 const appsFilter = reactive({ q: '', status: '', department: '' })
 
-const directionOptions = ['技术研发', '设计', '内容运营', '活动策划', '外联合作', '其他']
+const directionOptions = ['技术研发', '产品设计', '内容运营', '活动策划', '外联合作', '其他']
 const experienceOptions = ['不限', '零基础', '有相关经验', '有作品/项目']
 const educationOptions = ['不限', '大一', '大二', '大三', '大四', '研究生']
+const locationOptions = ['广州', '深圳', '珠海', '佛山', '东莞', '北京', '上海', '杭州', '线上']
+const commitmentOptions = ['时间灵活', '每周 2-4 小时', '每周 4-6 小时', '每周 6-10 小时', '每周 10 小时以上']
 const faqCategories = ['报名流程', '简历/作品', '面试/交流', '开发者体系', '社团生活', '其他']
 
 // 部门弹窗
 const deptModalOpen = ref(false)
 const editingDept = ref<Department | null>(null)
+const deptAdmins = ref<HallUserSummary[]>([])
+const deptHead = ref<HallUserSummary | null>(null)
 const deptForm = reactive<DeptForm>({
   name: '',
   summary: '',
   description: '',
   color: '',
-  admin_emails: '',
   head_user_id: 0,
   base_seats: 1,
   floating_seats: 0,
@@ -807,10 +865,11 @@ const deptForm = reactive<DeptForm>({
   enabled: 1,
   sort_order: 0,
 })
-const headOptions = ref<HeadOption[]>([])
 
-// 岗位弹窗
+// 岗位弹窗（分 3 步填写）
 const jobModalOpen = ref(false)
+const jobStep = ref(1)
+const jobSteps = ['基本信息', '岗位内容', '招募设置']
 const editingJob = ref<AdminJob | null>(null)
 const jobForm = reactive<JobForm>({
   title: '',
@@ -827,8 +886,8 @@ const jobForm = reactive<JobForm>({
   responsibilities: '',
   requirements: '',
   bonus: '',
-  description: '',
   headcount: 0,
+  auto_approve: 0,
   enabled: 1,
   sort_order: 0,
 })
@@ -854,10 +913,12 @@ const siteForm = reactive({
   brand: '',
   heroTitle: '',
   heroSubtitle: '',
-  announcement: '',
   tagline: '',
   contactEmail: '',
   bgWords: '',
+  teamTitle: '',
+  teamIntro: '',
+  teamHighlights: '',
   adminSubs: '',
 })
 
@@ -884,7 +945,7 @@ const visibleTabs = computed(() =>
 
 const snapshotLine = computed(() => {
   const s = appDetail.value?.snapshot || {}
-  return [s.school, s.education, s.major, s.graduation_year].filter(Boolean).join(' · ')
+  return [s.grade, s.school, s.education, s.major].filter(Boolean).join(' · ')
 })
 
 function setError(msg: string) {
@@ -945,23 +1006,18 @@ async function loadApplications() {
 async function loadFaqs() {
   faqs.value = (await api.adminFaqs()) || []
 }
-async function loadHeadOptions() {
-  try {
-    headOptions.value = (await api.adminUserLookup('')) || []
-  } catch {
-    headOptions.value = []
-  }
-}
 
 async function loadSite() {
   const s = (await api.adminSite()) as SiteConfig
   siteForm.brand = s.brand || ''
   siteForm.heroTitle = s.heroTitle || ''
   siteForm.heroSubtitle = s.heroSubtitle || ''
-  siteForm.announcement = s.announcement || ''
   siteForm.tagline = s.tagline || ''
   siteForm.contactEmail = s.contactEmail || ''
   siteForm.bgWords = s.bgWords || ''
+  siteForm.teamTitle = s.teamTitle || ''
+  siteForm.teamIntro = s.teamIntro || ''
+  siteForm.teamHighlights = s.teamHighlights || ''
   siteForm.adminSubs = s.adminSubs || ''
 }
 
@@ -978,7 +1034,7 @@ async function loadAll() {
     ]
     // 部门管理员没有问答/站点权限，跳过这两个请求
     if (isGlobal.value) {
-      tasks.push(loadFaqs(), loadSite(), loadHeadOptions())
+      tasks.push(loadFaqs(), loadSite())
     }
     await Promise.all(tasks)
   } catch (e) {
@@ -996,22 +1052,34 @@ function openDeptForm(d?: Department) {
   deptForm.summary = d?.summary || ''
   deptForm.description = d?.description || ''
   deptForm.color = d?.color || ''
-  deptForm.admin_emails = d?.admin_emails || ''
-  deptForm.head_user_id = Number((d as Record<string, unknown> | undefined)?.head_user_id) || 0
-  deptForm.base_seats = Number((d as Record<string, unknown> | undefined)?.base_seats) || 1
-  deptForm.floating_seats = Number((d as Record<string, unknown> | undefined)?.floating_seats) || 0
-  deptForm.output_delivery = Number((d as Record<string, unknown> | undefined)?.output_delivery) || 0
-  deptForm.output_usage = Number((d as Record<string, unknown> | undefined)?.output_usage) || 0
-  deptForm.output_talent = Number((d as Record<string, unknown> | undefined)?.output_talent) || 0
-  deptForm.output_activity = Number((d as Record<string, unknown> | undefined)?.output_activity) || 0
-  deptForm.output_note = String((d as Record<string, unknown> | undefined)?.output_note || '')
+  deptForm.head_user_id = Number(d?.head_user_id) || d?.head?.id || 0
+  deptForm.base_seats = Number(d?.base_seats) || 1
+  deptForm.floating_seats = Number(d?.floating_seats) || 0
+  deptForm.output_delivery = Number(d?.output_delivery) || 0
+  deptForm.output_usage = Number(d?.output_usage) || 0
+  deptForm.output_talent = Number(d?.output_talent) || 0
+  deptForm.output_activity = Number(d?.output_activity) || 0
+  deptForm.output_note = d?.output_note || ''
   deptForm.enabled = d?.enabled ?? 1
   deptForm.sort_order = d?.sort_order ?? departments.value.length + 1
-  if (!headOptions.value.length) void loadHeadOptions()
-  const currentHead = (d as Record<string, unknown> | undefined)?.head as HeadOption | undefined
-  if (currentHead && !headOptions.value.some((u) => u.id === currentHead.id)) {
-    headOptions.value = [currentHead, ...headOptions.value]
-  }
+  deptAdmins.value = (d?.adminUsers || []).map((u) => ({
+    id: u.id,
+    name: u.name,
+    email: u.email,
+    avatar: '',
+    developer_no: '',
+    developer_level: 'market',
+  }))
+  deptHead.value = d?.head
+    ? {
+        id: d.head.id,
+        name: d.head.name,
+        email: '',
+        avatar: d.head.avatar,
+        developer_no: d.head.developer_no,
+        developer_level: d.head.level,
+      }
+    : null
   deptModalOpen.value = true
 }
 
@@ -1029,11 +1097,16 @@ async function saveDept() {
       output_note: _note,
       ...payload
     } = deptForm
+    const finalPayload = {
+      ...payload,
+      head_user_id: deptHead.value?.id || 0,
+      admin_user_ids: deptAdmins.value.map((u) => u.id).filter((id) => id > 0),
+    }
     if (editingDept.value) {
-      await api.adminUpdateDepartment(editingDept.value.id, payload)
+      await api.adminUpdateDepartment(editingDept.value.id, finalPayload)
       showNotice('部门已更新')
     } else {
-      await api.adminCreateDepartment(payload)
+      await api.adminCreateDepartment(finalPayload)
       showNotice('部门已创建')
     }
     deptModalOpen.value = false
@@ -1060,31 +1133,61 @@ async function deleteDept(d: Department) {
 function openJobForm(j?: AdminJob) {
   clearMessages()
   editingJob.value = j || null
+  jobStep.value = 1
   jobForm.title = j?.title || ''
   jobForm.department_id = j?.department_id || departments.value[0]?.id || 0
   jobForm.direction = j?.direction || ''
   jobForm.location = j?.location || ''
-  jobForm.type = j?.type || 'fulltime'
+  jobForm.type = j?.type === 'parttime' ? 'fulltime' : j?.type || 'fulltime'
   jobForm.experience = j?.experience || '不限'
   jobForm.education = j?.education || '不限'
   jobForm.salary = j?.salary || ''
   jobForm.contact_wechat = j?.contact_wechat || ''
   jobForm.tags = typeof j?.tags === 'string' ? j.tags : ''
   jobForm.summary = j?.summary || ''
-  jobForm.responsibilities = j?.responsibilities || ''
+  jobForm.responsibilities = j?.responsibilities || j?.description || ''
   jobForm.requirements = j?.requirements || ''
   jobForm.bonus = j?.bonus || ''
-  jobForm.description = j?.description || ''
   jobForm.headcount = j?.headcount || 0
+  jobForm.auto_approve = j?.auto_approve ? 1 : 0
   jobForm.enabled = j?.enabled ?? 1
   jobForm.sort_order = j?.sort_order ?? jobs.value.length + 1
   jobModalOpen.value = true
 }
 
+function validateJobStep(step: number): boolean {
+  modalError.value = ''
+  if (step === 1) {
+    if (!jobForm.title.trim()) {
+      modalError.value = '请填写岗位名称'
+      return false
+    }
+    if (!jobForm.department_id) {
+      modalError.value = '请选择所属部门'
+      return false
+    }
+  }
+  return true
+}
+
+function optionList(base: string[], current: string): string[] {
+  const value = String(current || '').trim()
+  return value && !base.includes(value) ? [value, ...base] : base
+}
+
+function jobPrimary() {
+  if (jobStep.value < 3) {
+    if (!validateJobStep(jobStep.value)) return
+    jobStep.value += 1
+    return
+  }
+  void saveJob()
+}
+
 async function saveJob() {
   modalError.value = ''
-  if (!jobForm.department_id) {
-    modalError.value = '请选择所属部门'
+  if (!validateJobStep(1)) {
+    jobStep.value = 1
     return
   }
   saving.value = true
@@ -1468,6 +1571,78 @@ onMounted(loadAll)
   color: var(--ink);
   font-size: 13px;
   text-align: left;
+}
+
+.job-auto-badge {
+  margin-left: 8px;
+}
+.site-block-title {
+  margin-top: 24px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+.site-advanced {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+.site-advanced summary {
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 13px;
+  margin-bottom: 12px;
+}
+
+.modal-head-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.modal-head-row h3 {
+  margin: 0;
+}
+.step-nav {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+.step-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  border: none;
+  background: transparent;
+  padding: 7px 10px;
+  border-radius: 8px;
+  color: var(--ink-faint);
+  font-size: 12px;
+}
+.step-tab.done {
+  color: var(--ink-soft);
+}
+.step-tab.active {
+  color: var(--ink);
+  font-weight: 600;
+  background: var(--input-bg);
+}
+.step-num {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  font-size: 10px;
+  font-weight: 700;
+}
+.step-tab.done .step-num,
+.step-tab.active .step-num {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: #fff;
 }
 
 @media (max-width: 900px) {

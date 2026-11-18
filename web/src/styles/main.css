@@ -23,6 +23,10 @@
   --input-bg-hover: #eeeeee;
   --font: 'Inter', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui, sans-serif;
   --font-display: 'Inter', 'HarmonyOS Sans SC', 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  /* 中文标题：偏书写感的楷体；未加载字体时回退到系统楷体/宋体 */
+  --font-cn-display: 'LXGW WenKai', 'Kaiti SC', 'STKaiti', 'KaiTi', 'Noto Serif SC', 'Songti SC', serif;
+  /* 中文正文：克制的无衬线，不作为标题使用 */
+  --font-cn-body: 'Noto Sans SC', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, monospace;
   --letter-tight: -0.04em;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
@@ -385,6 +389,7 @@ button {
 .modal-actions {
   display: flex;
   gap: 10px;
+  flex-wrap: wrap;
   margin-top: 4px;
 }
 
@@ -1139,6 +1144,15 @@ button {
 }
 
 @media (max-width: 640px) {
+  /* iOS 在字号 <16px 的输入框聚焦时会自动放大页面 */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
+  }
+  .modal {
+    padding: 16px;
+  }
   .site-nav {
     gap: 0;
   }

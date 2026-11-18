@@ -11,6 +11,10 @@ import {
 import { submitOa, queryOa } from '../dev-platform.js'
 import { buildOaBody } from './jobs.js'
 import {
+  getDirectory,
+  refreshSsoDirectory,
+} from '../services/user-directory.js'
+import {
   departmentAdminDepartmentsOf,
   departmentPublicView,
   departmentSeatStats,
@@ -30,6 +34,7 @@ import {
   canViewDefense,
   promoteWaitlist,
 } from '../services/defense.js'
+import { syncUnissoDeveloper } from '../services/developer-sync.js'
 import {
   applyPublicityToDepartments,
   buildPublicityContent,
@@ -146,10 +151,33 @@ adminRouter.get('/me', (req, res) => {
       roundtable: ctx.global,
       faqs: ctx.global,
       site: ctx.global,
+      history: ctx.global,
       jobs: true,
       applications: true,
     },
   })
+})
+
+// ===== 用户目录（Pod 内缓存，供后台下拉快速匹配） =====
+adminRouter.get('/directory/users', async (req, res) => {
+  if (!ensureGlobal(req, res)) return
+  const q = String(req.query.q || '').trim()
+  const registeredOnly = String(req.query.registeredOnly || '') === '1'
+  const includeUnregistered = String(req.query.includeUnregistered || '') !== '0'
+  const force = String(req.query.refresh || '') === '1'
+  const limit = Math.min(5000, Math.max(1, Number(req.query.limit) || 5000))
+  const page = await getDirectory(q, { registeredOnly, includeUnregistered, force, limit })
+  ok(res, page)
+})
+
+adminRouter.post('/directory/refresh', async (req, res) => {
+  if (!ensureGlobal(req, res)) return
+  try {
+    await refreshSsoDirectory()
+    ok(res, { cachedAt: db.getStore().sso_user_cache.updated_at, total: db.getStore().sso_user_cache.users.length })
+  } catch (e) {
+    fail(res, 503, e instanceof Error ? e.message : 'SSO 用户目录刷新失败')
+  }
 })
 
 // ===== 部门管理 =====
@@ -229,6 +257,20 @@ adminRouter.post('/departments', async (req, res) => {
     updated_at: t,
   }
   s.departments.push(row)
+  // 新建时也支持直接指定部门管理员（界面使用用户下拉，不再手填邮箱）
+  if (Array.isArray(b.admin_user_ids)) {
+    const ids = b.admin_user_ids
+      .map((x) => Number(x))
+      .filter((n) => Number.isFinite(n) && n > 0 && s.users.some((u) => u.id === n))
+    row.admin_user_ids = Array.from(new Set(ids)).join(',')
+  }
+  if (row.head_user_id) {
+    const ids = row.admin_user_ids
+      .split(',')
+      .map((x) => Number(x.trim()))
+      .filter((n) => Number.isFinite(n) && n > 0)
+    if (!ids.includes(row.head_user_id)) row.admin_user_ids = [...ids, row.head_user_id].join(',')
+  }
   await db.persist()
   ok(res, mapDepartment(row), '部门已创建')
 })
@@ -347,6 +389,7 @@ adminRouter.put('/departments/:id', async (req, res) => {
               updated_at: now(),
             })
         }
+        await syncUnissoDeveloper(head)
       }
     }
   }
@@ -452,7 +495,7 @@ function applyJobFields(
   job.department = departmentName
   if (b.direction != null) job.direction = str(b.direction, 40)
   if (b.location != null) job.location = str(b.location, 60)
-  if (b.type != null && ['fulltime', 'intern', 'parttime'].includes(String(b.type))) {
+  if (b.type != null && ['fulltime', 'intern'].includes(String(b.type))) {
     job.type = String(b.type) as JobRow['type']
   }
   if (b.experience != null) job.experience = str(b.experience, 40)
@@ -466,6 +509,9 @@ function applyJobFields(
   if (b.bonus != null) job.bonus = str(b.bonus, 4000)
   if (b.description != null) job.description = str(b.description, 8000)
   if (b.headcount != null) job.headcount = num(b.headcount, 0, 9999, job.headcount)
+  if (b.auto_approve != null) {
+    job.auto_approve = b.auto_approve === true || b.auto_approve === 1 ? 1 : 0
+  }
   if (b.enabled != null) job.enabled = b.enabled === false || b.enabled === 0 ? 0 : 1
   if (b.sort_order != null) job.sort_order = num(b.sort_order, -9999, 9999, job.sort_order)
 }
@@ -516,6 +562,7 @@ adminRouter.post('/jobs', async (req, res) => {
     bonus: '',
     description: '',
     headcount: 0,
+    auto_approve: 0,
     enabled: 1,
     sort_order: s.jobs.length + 1,
     created_at: t,
@@ -703,6 +750,7 @@ adminRouter.post('/applications/:id/stage', async (req, res) => {
         return
       }
       joinDepartment(user, dept, { sourceApplicationId: app.id, note: '管理员确认加入' })
+      await syncUnissoDeveloper(user)
       app.confirmed_at = now()
       app.joined_at = now()
     }
@@ -1059,6 +1107,9 @@ adminRouter.patch('/users/:id/role', async (req, res) => {
     ) {
       releaseRoundtableSeat(u, { reason: '卸任部门负责人', by: adminName(req) })
     }
+    if (u.developer_level === 'project' || u.developer_level === 'roundtable') {
+      await syncUnissoDeveloper(u)
+    }
   }
   // 角色关系是唯一事实来源：把用户邮箱从不再勾选的部门 legacy 管理员名单中移除，
 // 否则旧邮箱白名单会让「取消部门管理员」失效。
@@ -1178,6 +1229,9 @@ adminRouter.patch('/users/:id/identity', async (req, res) => {
       if (level === 'market') {
         leaveDepartment(u, '管理员调整为集市开发者')
       }
+    }
+    if (level === 'project' || level === 'roundtable') {
+      await syncUnissoDeveloper(u)
     }
   }
   await db.persist()
@@ -1731,6 +1785,9 @@ const SITE_FIELDS = [
   'tagline',
   'contactEmail',
   'bgWords',
+  'teamTitle',
+  'teamIntro',
+  'teamHighlights',
   'adminSubs',
 ] as const
 
@@ -1741,7 +1798,15 @@ adminRouter.put('/site', async (req, res) => {
   for (const key of SITE_FIELDS) {
     if (b[key] == null) continue
     const max =
-      key === 'heroSubtitle' || key === 'bgWords' ? 300 : key === 'adminSubs' ? 2000 : 120
+      key === 'teamIntro'
+        ? 4000
+        : key === 'teamHighlights'
+          ? 800
+          : key === 'heroSubtitle' || key === 'bgWords'
+            ? 300
+            : key === 'adminSubs'
+              ? 2000
+              : 120
     const val = String(b[key]).slice(0, max)
     if (key === 'contactEmail' && val && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(val)) {
       fail(res, 400, '联系邮箱格式不正确')

@@ -6,162 +6,86 @@
       <div class="editor-top">
         <RouterLink class="back-link" to="/me?tab=resumes">← 返回我的简历</RouterLink>
         <div class="editor-actions">
-          <RouterLink v-if="redirectTo" class="btn btn-ghost btn-sm" :to="redirectTo">返回报名</RouterLink>
+          <span class="save-state" :class="`state-${saveState}`">{{ saveLabel }}</span>
+          <RouterLink v-if="redirectTo" class="btn btn-ghost btn-sm" :to="redirectTo">返回继续</RouterLink>
           <button v-if="!isNew" class="btn btn-danger btn-sm" @click="removeResume">删除简历</button>
           <button class="btn btn-primary" :disabled="saving" @click="save">
-            {{ saving ? '保存中…' : isNew ? '创建简历' : '保存修改' }}
+            {{ saving ? '保存中…' : isNew ? '保存简历' : '保存修改' }}
           </button>
         </div>
       </div>
 
       <header class="editor-head">
-        <h1 class="editor-title">{{ isNew ? '新建简历' : '编辑简历' }}</h1>
+        <h1 class="editor-title">{{ isNew ? '完善简历' : '编辑简历' }}</h1>
         <p class="editor-sub">
-          简历信息仅用于本次部门双选评估。上传 PDF 后会自动解析并预填，你可以随时修改。
+          填写姓名、年级、邮箱和简介即可。上传 PDF 后 AI 会自动解析，解析结果可以继续修改。
         </p>
       </header>
 
       <p v-if="error" class="notice notice-error">{{ error }}</p>
       <p v-if="notice" class="notice notice-success">{{ notice }}</p>
       <p v-if="parseNote" class="notice notice-info">{{ parseNote }}</p>
+      <p v-if="draftRestored" class="notice notice-info">
+        已恢复上次未提交的本地草稿。
+        <button class="link-btn" type="button" @click="discardDraft">清除草稿</button>
+      </p>
 
-      <!-- 新建时上传 PDF -->
-      <section v-if="isNew" class="form-section upload-section">
-        <div class="upload-copy">
-          <h2 class="form-section-title">上传 PDF 简历（可选）</h2>
-          <p class="upload-hint">支持 PDF，最大 10MB。上传后自动解析并创建一份可编辑的在线简历。</p>
+      <!-- 新建：上传 PDF，AI 自动解析 -->
+      <section v-if="isNew" class="upload-section">
+        <div>
+          <h2 class="upload-title">有现成 PDF？让 AI 帮你填</h2>
+          <p class="upload-hint">支持 PDF，最大 10MB。上传后 AI 会提取姓名、年级、邮箱和简介。</p>
         </div>
-        <div class="upload-actions">
-          <button class="btn btn-soft" :disabled="uploading" @click="triggerUpload">
-            {{ uploading ? '解析中…' : '选择 PDF 文件' }}
-          </button>
-          <input ref="fileInput" class="hidden-input" type="file" accept=".pdf,application/pdf" @change="onFile" />
-          <span class="upload-or">或直接在下方填写</span>
-        </div>
+        <button class="btn btn-soft btn-sm" type="button" :disabled="uploading" @click="triggerUpload">
+          {{ uploading ? 'AI 解析中…' : '上传 PDF' }}
+        </button>
+        <input ref="fileInput" class="hidden-input" type="file" accept=".pdf,application/pdf" @change="onFile" />
       </section>
 
-      <!-- 编辑时展示附件 -->
-      <section v-if="!isNew && hasFile" class="form-section file-section">
-        <div>
-          <h2 class="form-section-title">PDF 附件</h2>
-          <p class="file-name">{{ fileName || 'resume.pdf' }}</p>
-        </div>
-        <button class="btn btn-ghost btn-sm" type="button" @click="openFile">查看 PDF</button>
+      <section v-if="!isNew && hasFile" class="file-section">
+        <span class="muted small">PDF 附件：{{ fileName || 'resume.pdf' }}</span>
+        <button class="link-btn" type="button" @click="openFile">查看 PDF</button>
       </section>
 
       <div v-if="loading" class="editor-loading">加载中…</div>
 
-      <template v-else>
-        <!-- 基本信息 -->
+      <form v-else class="editor-form" @submit.prevent="save">
         <section class="form-section">
-          <h2 class="form-section-title">基本信息</h2>
           <div class="form-grid">
-            <div class="field full">
-              <label>简历标题</label>
-              <input v-model="form.title" maxlength="100" placeholder="如：张三的简历" />
-            </div>
             <div class="field">
               <label>姓名 *</label>
-              <input v-model="form.name" maxlength="60" placeholder="你的姓名" />
+              <input v-model="form.name" required maxlength="60" placeholder="你的姓名" />
             </div>
             <div class="field">
-              <label>手机号</label>
-              <input v-model="form.phone" maxlength="40" placeholder="用于联系你" />
-            </div>
-            <div class="field">
-              <label>邮箱</label>
-              <input v-model="form.email" maxlength="200" placeholder="you@example.com" />
-            </div>
-            <div class="field">
-              <label>所在城市</label>
-              <input v-model="form.city" maxlength="60" placeholder="如：广州" />
-            </div>
-            <div class="field">
-              <label>求职意向</label>
-              <input v-model="form.intention" maxlength="100" placeholder="如：前端开发工程师" />
-            </div>
-            <div class="field">
-              <label>工作年限</label>
-              <input v-model.number="form.experience_years" type="number" min="0" max="60" />
-            </div>
-          </div>
-        </section>
-
-        <!-- 教育背景 -->
-        <section class="form-section">
-          <h2 class="form-section-title">教育背景</h2>
-          <div class="form-grid">
-            <div class="field">
-              <label>最高学历</label>
-              <select v-model="form.education">
-                <option value="">请选择</option>
-                <option v-for="e in eduOptions" :key="e" :value="e">{{ e }}</option>
+              <label>年级 *</label>
+              <select v-model="form.grade" required>
+                <option value="" disabled>请选择年级</option>
                 <option
-                  v-if="form.education && !eduOptions.includes(form.education)"
-                  :value="form.education"
+                  v-if="form.grade && !gradeOptions.includes(form.grade)"
+                  :value="form.grade"
                 >
-                  {{ form.education }}
+                  {{ form.grade }}
                 </option>
+                <option v-for="g in gradeOptions" :key="g" :value="g">{{ g }}</option>
               </select>
             </div>
             <div class="field">
-              <label>学校</label>
-              <input v-model="form.school" maxlength="100" placeholder="如：中山大学" />
+              <label>邮箱 *</label>
+              <input v-model="form.email" required type="email" maxlength="200" placeholder="you@example.com" />
             </div>
             <div class="field">
-              <label>专业</label>
-              <input v-model="form.major" maxlength="100" placeholder="如：软件工程" />
-            </div>
-            <div class="field">
-              <label>毕业年份</label>
-              <input v-model="form.graduation_year" maxlength="20" placeholder="如：2026" />
+              <label>手机号（选填）</label>
+              <input v-model="form.phone" maxlength="40" placeholder="方便联系你" />
             </div>
             <div class="field full">
-              <label>教育经历补充（选填）</label>
+              <label>简介 *</label>
               <textarea
-                v-model="form.education_experience"
-                rows="3"
-                placeholder="主修课程、奖项、校园经历等"
+                v-model="form.summary"
+                required
+                rows="7"
+                maxlength="2000"
+                placeholder="介绍一下你的技术方向、项目/实践经历、兴趣，以及每周大概能投入的时间。"
               />
-            </div>
-          </div>
-        </section>
-
-        <!-- 工作/实习经历 -->
-        <section class="form-section">
-          <h2 class="form-section-title">工作 / 实习经历</h2>
-          <div class="field">
-            <textarea
-              v-model="form.work_experience"
-              rows="7"
-              placeholder="公司 / 时间 / 岗位 / 主要工作与成果，每段经历换行分隔"
-            />
-          </div>
-        </section>
-
-        <!-- 项目经历 -->
-        <section class="form-section">
-          <h2 class="form-section-title">项目经历</h2>
-          <div class="field">
-            <textarea
-              v-model="form.project_experience"
-              rows="6"
-              placeholder="项目名称 / 你的角色 / 技术栈 / 解决的问题与结果"
-            />
-          </div>
-        </section>
-
-        <!-- 技能与自我评价 -->
-        <section class="form-section">
-          <h2 class="form-section-title">技能与自我评价</h2>
-          <div class="form-grid">
-            <div class="field full">
-              <label>专业技能（用逗号分隔）</label>
-              <input v-model="form.skills" maxlength="500" placeholder="如：TypeScript, Vue, Node.js" />
-            </div>
-            <div class="field full">
-              <label>自我评价</label>
-              <textarea v-model="form.summary" rows="4" placeholder="简单介绍你的优势与方向" />
             </div>
             <div class="field full checkbox-field">
               <label class="checkbox-label">
@@ -170,20 +94,14 @@
               </label>
             </div>
           </div>
+          <p v-if="missing.length" class="form-hint">还差：{{ missing.join('、') }}</p>
         </section>
+      </form>
 
-        <div class="editor-bottom">
-          <RouterLink class="btn btn-ghost" to="/me?tab=resumes">取消</RouterLink>
-          <button class="btn btn-primary" :disabled="saving" @click="save">
-            {{ saving ? '保存中…' : isNew ? '创建简历' : '保存修改' }}
-          </button>
-        </div>
-
-        <details v-if="parsedText" class="parsed-box">
-          <summary>查看 PDF 解析原文</summary>
-          <pre class="parsed-text">{{ parsedText }}</pre>
-        </details>
-      </template>
+      <details v-if="parsedText" class="parsed-box">
+        <summary>查看 PDF 解析原文</summary>
+        <pre class="parsed-text">{{ parsedText }}</pre>
+      </details>
     </main>
 
     <SiteFooter />
@@ -191,45 +109,36 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { api } from '../api'
+import { api, type Resume } from '../api'
 import SiteHeader from '../components/SiteHeader.vue'
 import SiteFooter from '../components/SiteFooter.vue'
 import { useAuth } from '../stores/auth'
 
 type ResumeForm = {
-  title: string
   name: string
-  phone: string
+  grade: string
   email: string
-  city: string
-  intention: string
-  education: string
-  school: string
-  major: string
-  graduation_year: string
-  experience_years: number
-  skills: string
+  phone: string
   summary: string
-  work_experience: string
-  project_experience: string
-  education_experience: string
   is_default: boolean
 }
+
+const DRAFT_KEY = 'join_resume_draft_v2'
+const gradeOptions = ['大一', '大二', '大三', '大四', '研一', '研二', '研三', '已毕业', '其他']
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuth()
 const user = auth.user
 
-const eduOptions = ['高中', '大专', '本科', '硕士', '博士']
-
 const isNew = computed(() => !route.params.id || route.params.id === 'new')
 const redirectTo = computed(() => {
   const r = route.query.redirect
   return typeof r === 'string' && r.startsWith('/') && !r.startsWith('//') ? r : ''
 })
+
 const loading = ref(true)
 const saving = ref(false)
 const uploading = ref(false)
@@ -240,44 +149,63 @@ const parsedText = ref('')
 const hasFile = ref(false)
 const fileName = ref('')
 const fileInput = ref<HTMLInputElement | null>(null)
+const draftRestored = ref(false)
+const lastSavedAt = ref<Date | null>(null)
+const saveState = ref<'idle' | 'dirty' | 'saving' | 'saved' | 'error'>('idle')
+const saveError = ref('')
 
 const form = reactive<ResumeForm>({
-  title: '',
   name: '',
-  phone: '',
+  grade: '',
   email: '',
-  city: '',
-  intention: '',
-  education: '',
-  school: '',
-  major: '',
-  graduation_year: '',
-  experience_years: 0,
-  skills: '',
+  phone: '',
   summary: '',
-  work_experience: '',
-  project_experience: '',
-  education_experience: '',
   is_default: false,
 })
 
+const missing = computed(() => {
+  const list: string[] = []
+  if (!form.name.trim()) list.push('姓名')
+  if (!form.grade.trim()) list.push('年级')
+  if (!form.email.trim()) list.push('邮箱')
+  if (!form.summary.trim()) list.push('简介')
+  return list
+})
+
+const saveLabel = computed(() => {
+  if (saveState.value === 'saving') return '自动保存中…'
+  if (saveState.value === 'dirty') return '有未保存修改'
+  if (saveState.value === 'error') return saveError.value || '自动保存失败'
+  if (saveState.value === 'saved') {
+    if (isNew.value) return '草稿已保存在本机'
+    const t = lastSavedAt.value
+    return t ? `已自动保存 ${t.toLocaleTimeString('zh-CN', { hour12: false }).slice(0, 5)}` : '已自动保存'
+  }
+  return ''
+})
+
+let hydrating = false
+let autosaveTimer: number | undefined
+let autoSaving = false
+let pendingAutosave = false
+
+function payload() {
+  return {
+    name: form.name.trim(),
+    grade: form.grade.trim(),
+    email: form.email.trim(),
+    phone: form.phone.trim(),
+    summary: form.summary.trim(),
+    is_default: form.is_default,
+  }
+}
+
 function resetForm() {
-  form.title = ''
   form.name = user.value?.name || ''
-  form.phone = ''
+  form.grade = ''
   form.email = user.value?.email || ''
-  form.city = ''
-  form.intention = ''
-  form.education = ''
-  form.school = ''
-  form.major = ''
-  form.graduation_year = ''
-  form.experience_years = 0
-  form.skills = ''
+  form.phone = ''
   form.summary = ''
-  form.work_experience = ''
-  form.project_experience = ''
-  form.education_experience = ''
   form.is_default = true
   parseNote.value = ''
   parsedText.value = ''
@@ -286,22 +214,11 @@ function resetForm() {
 }
 
 function fillForm(r: Awaited<ReturnType<typeof api.myResume>>) {
-  form.title = r.title || ''
   form.name = r.name || ''
+  form.grade = r.grade || ''
+  form.email = r.email || user.value?.email || ''
   form.phone = r.phone || ''
-  form.email = r.email || ''
-  form.city = r.city || ''
-  form.intention = r.intention || ''
-  form.education = r.education || ''
-  form.school = r.school || ''
-  form.major = r.major || ''
-  form.graduation_year = r.graduation_year || ''
-  form.experience_years = r.experience_years || 0
-  form.skills = r.skills || ''
   form.summary = r.summary || ''
-  form.work_experience = r.work_experience || ''
-  form.project_experience = r.project_experience || ''
-  form.education_experience = r.education_experience || ''
   form.is_default = Boolean(r.is_default)
   parseNote.value = r.parse_note || ''
   parsedText.value = r.parsed_text || ''
@@ -309,28 +226,78 @@ function fillForm(r: Awaited<ReturnType<typeof api.myResume>>) {
   fileName.value = r.file_name || ''
 }
 
+function restoreDraft(): boolean {
+  try {
+    const raw = localStorage.getItem(DRAFT_KEY)
+    if (!raw) return false
+    const draft = JSON.parse(raw) as Partial<ResumeForm>
+    if (!draft || typeof draft !== 'object') return false
+    for (const key of ['name', 'grade', 'email', 'phone', 'summary'] as const) {
+      if (typeof draft[key] === 'string') form[key] = draft[key] as string
+    }
+    if (draft.is_default != null) form.is_default = Boolean(draft.is_default)
+    return true
+  } catch {
+    return false
+  }
+}
+
+function persistDraft() {
+  try {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify({ ...form }))
+    lastSavedAt.value = new Date()
+    saveState.value = 'saved'
+  } catch {
+    saveState.value = 'error'
+    saveError.value = '本地草稿保存失败'
+  }
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_KEY)
+  } catch {
+    /* ignore */
+  }
+}
+
+function discardDraft() {
+  clearDraft()
+  draftRestored.value = false
+  resetForm()
+  saveState.value = 'idle'
+  lastSavedAt.value = null
+}
+
 async function load() {
   loading.value = true
+  hydrating = true
   error.value = ''
   notice.value = ''
   try {
     await auth.ensure()
     if (isNew.value) {
       resetForm()
-      return
+      draftRestored.value = restoreDraft()
+    } else {
+      const r = await api.myResume(Number(route.params.id))
+      fillForm(r)
     }
-    const r = await api.myResume(Number(route.params.id))
-    fillForm(r)
   } catch (e) {
     error.value = e instanceof Error ? e.message : '加载失败'
   } finally {
+    await nextTick()
+    hydrating = false
     loading.value = false
   }
 }
 
 function validate(): string {
   if (!form.name.trim()) return '请填写姓名'
-  if (!form.phone.trim() && !form.email.trim()) return '请至少填写手机号或邮箱'
+  if (!form.grade.trim()) return '请选择年级'
+  if (!form.email.trim()) return '请填写邮箱'
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())) return '邮箱格式不正确'
+  if (!form.summary.trim()) return '请填写简介'
   return ''
 }
 
@@ -343,48 +310,82 @@ async function save() {
     return
   }
   saving.value = true
+  saveState.value = 'saving'
   try {
-    const payload = {
-      title: form.title.trim(),
-      name: form.name.trim(),
-      phone: form.phone.trim(),
-      email: form.email.trim(),
-      city: form.city.trim(),
-      intention: form.intention.trim(),
-      education: form.education.trim(),
-      school: form.school.trim(),
-      major: form.major.trim(),
-      graduation_year: form.graduation_year.trim(),
-      experience_years: form.experience_years,
-      skills: form.skills.trim(),
-      summary: form.summary.trim(),
-      work_experience: form.work_experience.trim(),
-      project_experience: form.project_experience.trim(),
-      education_experience: form.education_experience.trim(),
-      is_default: form.is_default,
-    }
     if (isNew.value) {
-      const r = await api.createResume(payload)
+      const r = await api.createResume(payload())
+      clearDraft()
+      draftRestored.value = false
+      lastSavedAt.value = new Date()
+      saveState.value = 'saved'
       if (redirectTo.value) {
-        // 从岗位详情页跳转来创建简历：保存后直接回去继续报名
         await router.replace(redirectTo.value)
         return
       }
-      notice.value = '简历已创建'
+      notice.value = '简历已保存'
       await router.replace(`/me/resumes/${r.id}`)
       await load()
     } else {
-      await api.updateResume(Number(route.params.id), payload)
+      await api.updateResume(Number(route.params.id), payload())
+      lastSavedAt.value = new Date()
+      saveState.value = 'saved'
+      if (redirectTo.value) {
+        await router.replace(redirectTo.value)
+        return
+      }
       notice.value = '已保存'
-      const def = form.is_default
-      if (def) form.is_default = true
     }
   } catch (e) {
-    error.value = e instanceof Error ? e.message : '保存失败'
+    saveState.value = 'error'
+    saveError.value = e instanceof Error ? e.message : '保存失败'
+    error.value = saveError.value
   } finally {
     saving.value = false
   }
 }
+
+async function autosave() {
+  if (hydrating || loading.value) return
+  if (saving.value) {
+    pendingAutosave = true
+    return
+  }
+  if (autoSaving) {
+    pendingAutosave = true
+    return
+  }
+  if (isNew.value) {
+    persistDraft()
+    return
+  }
+  autoSaving = true
+  saveState.value = 'saving'
+  try {
+    await api.updateResume(Number(route.params.id), payload())
+    lastSavedAt.value = new Date()
+    saveState.value = 'saved'
+  } catch (e) {
+    saveState.value = 'error'
+    saveError.value = e instanceof Error ? e.message : '自动保存失败'
+  } finally {
+    autoSaving = false
+    if (pendingAutosave) {
+      pendingAutosave = false
+      scheduleAutosave()
+    }
+  }
+}
+
+function scheduleAutosave() {
+  if (hydrating) return
+  saveState.value = 'dirty'
+  if (autosaveTimer) window.clearTimeout(autosaveTimer)
+  autosaveTimer = window.setTimeout(() => {
+    void autosave()
+  }, 1200)
+}
+
+watch(form, scheduleAutosave, { deep: true })
 
 function triggerUpload() {
   error.value = ''
@@ -418,6 +419,7 @@ async function onFile(e: Event) {
   try {
     const dataUrl = await readAsDataURL(file)
     const res = await api.uploadResume(file.name, dataUrl.split(',')[1] || '')
+    clearDraft()
     await router.replace({
       path: `/me/resumes/${res.resume.id}`,
       query: redirectTo.value ? { redirect: redirectTo.value } : {},
@@ -444,9 +446,14 @@ function openFile() {
 }
 
 onMounted(load)
+onBeforeUnmount(() => {
+  if (autosaveTimer) window.clearTimeout(autosaveTimer)
+})
 watch(
   () => route.params.id,
-  () => load(),
+  () => {
+    void load()
+  },
 )
 </script>
 
@@ -461,7 +468,7 @@ watch(
   justify-content: space-between;
   gap: 14px;
   flex-wrap: wrap;
-  margin-bottom: 22px;
+  margin-bottom: 20px;
 }
 .back-link {
   color: var(--ink-soft);
@@ -472,10 +479,22 @@ watch(
 }
 .editor-actions {
   display: flex;
+  align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
+}
+.save-state {
+  color: var(--ink-faint);
+  font-size: 11px;
+}
+.state-dirty {
+  color: #7a5a2e;
+}
+.state-error {
+  color: #8a4a42;
 }
 .editor-head {
-  margin-bottom: 24px;
+  margin-bottom: 22px;
 }
 .editor-title {
   margin: 0 0 6px;
@@ -489,22 +508,23 @@ watch(
   font-size: 13px;
   line-height: 1.7;
 }
-.page-main :deep(.form-section) {
-  max-width: 880px;
-}
 .upload-section,
 .file-section {
+  max-width: 880px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
   flex-wrap: wrap;
-  max-width: 880px;
-  background: transparent;
-  border: none;
+  padding: 16px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 8px;
 }
-.upload-copy .form-section-title {
-  margin-bottom: 6px;
+.upload-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
 }
 .upload-hint {
   margin: 0;
@@ -512,35 +532,23 @@ watch(
   font-size: 12px;
   line-height: 1.6;
 }
-.upload-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.upload-or {
-  color: var(--ink-faint);
-  font-size: 12px;
+.file-section {
+  border-top: none;
+  padding-top: 0;
 }
 .hidden-input {
   display: none;
 }
-.file-section {
-  background: transparent;
-  border: none;
+.editor-form {
+  max-width: 880px;
 }
-.file-section .form-section-title {
-  margin-bottom: 4px;
+.editor-form .form-section {
+  padding-top: 20px;
 }
-.file-name {
-  margin: 0;
-  color: var(--ink-soft);
-  font-size: 13px;
-}
-.editor-loading {
-  padding: 60px 0;
-  text-align: center;
-  color: var(--ink-soft);
+.form-hint {
+  margin: 14px 0 0;
+  color: #7a5a2e;
+  font-size: 12px;
 }
 .checkbox-field {
   padding-top: 4px;
@@ -553,16 +561,14 @@ watch(
   font-size: 13px;
   cursor: pointer;
 }
-.editor-bottom {
-  max-width: 880px;
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 8px 0 16px;
+.editor-loading {
+  padding: 60px 0;
+  text-align: center;
+  color: var(--ink-soft);
 }
 .parsed-box {
   max-width: 880px;
-  margin-top: 10px;
+  margin-top: 18px;
   border: none;
   border-top: 1px solid var(--line);
   border-radius: 0;
@@ -584,11 +590,23 @@ watch(
   line-height: 1.8;
   color: var(--ink-soft);
 }
+.link-btn {
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 @media (max-width: 640px) {
   .upload-section,
   .file-section {
-    flex-direction: column;
     align-items: flex-start;
+    flex-direction: column;
+  }
+  .editor-actions .save-state {
+    flex-basis: 100%;
   }
 }
 </style>

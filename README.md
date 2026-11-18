@@ -6,14 +6,16 @@
 
 | 入口 | 地址 | 说明 |
 |------|------|------|
-| 首页 | https://join.ssemarket.cn | 品牌、成长路径、流程与 FAQ 预览 |
+| 首页 | https://join.ssemarket.cn | 品牌、管理员维护的团队介绍与常见问题 |
 | 部门岗位 | https://join.ssemarket.cn/jobs | 关键词 / 部门 / 方向 / 类型 / 地点筛选 |
 | 岗位详情 | https://join.ssemarket.cn/jobs/:slug | 职责、要求、部门介绍、登录后报名 |
 | 席位与晋升公示 | https://join.ssemarket.cn/teams | 会议公示列表 + 技术部席位名额表 |
 | 部门介绍 | https://join.ssemarket.cn/departments/:slug | 负责人填写的部门介绍与部门岗位 |
 | 公示详情 | https://join.ssemarket.cn/publicity/:id | 自动生成的会议公示文档（可打印 / 复制） |
 | 常见问题 | https://join.ssemarket.cn/faq | 分类、搜索、折叠问答 |
-| 登录 | https://join.ssemarket.cn/login | UniSSO 为主；管理员邮箱验证码为备用 |
+| 年鉴与名人堂 | https://join.ssemarket.cn/history | 章节式长文档 + 名人堂卡片，点击查看主页与联系方式 |
+| 名人堂资料填写 | https://join.ssemarket.cn/hall-invite/:token | 邮件邀请链接，本人填写/更新名人堂资料 |
+| 登录 | https://join.ssemarket.cn/login | UniSSO 无感登录（邮箱密码）；授权跳转保留作演示 |
 | 个人主页 | https://join.ssemarket.cn/me | 开发者编号 / 层级 / 部门 / 席位 / 答辩 / 待评审任务 |
 | 发起答辩 | https://join.ssemarket.cn/me/defense/new | 项目开发者发起技术部答辩 |
 | 答辩详情 | https://join.ssemarket.cn/defenses/:id | 多级评审进度、提交评审、撤回 |
@@ -89,6 +91,7 @@
 | 公示 | ✅ | — | — |
 | 部门介绍 | ✅ | ✅（本部门） | — |
 | 问答 / 站点配置 | ✅ | — | — |
+| 年鉴与名人堂 | ✅ | — | — |
 
 ### 成员与权限（核心）
 
@@ -121,6 +124,22 @@
 - 「保存并发布」后：公示出现在 `/teams`，并自动生成可打印的公示文档（`/publicity/:id`）；同时写回各部门当前席位与指标。
 - 草稿可在列表中点「发布」正式生效。
 
+### 集市年鉴与名人堂
+
+- `/history` 把「集市年鉴」组织成一篇可编辑的章节式长文档：左侧目录随滚动高亮，右侧按 `sort_order` 顺序渲染每一章。
+- 章节正文使用 Markdown（标题、列表、引用、表格、链接、围栏代码块），由前端轻量渲染器转义后展示；管理员在后台「年鉴与名人堂」中新增/编辑/删除章节，并可直接预览。
+- **名人堂固定作为最后一章**，以特殊的双列卡片展示成员：头像/首字、姓名、年份、头衔/部门与一句话寄语。点击卡片打开详情弹层，展示集市主页账号、招聘主页介绍与邮箱 / 微信 / 其他主页（未填写则不展示，微信支持一键复制）。
+- **名人堂成员必须来自系统已注册用户**：后台通过搜索下拉选择用户（按姓名 / 邮箱 / 开发者编号检索），保存时校验 `user_id`；姓名与默认头像以用户资料为准，用户改名后前台展示同步更新。
+- 成员资料包含：一句话寄语、自我介绍（Markdown）、贡献（Markdown）、职位/头衔、年份、部门、集市主页与联系方式。
+- **权限边界**：通过邀请提交的资料，寄语和自我介绍由本人填写，管理员不可覆盖；职位、贡献、部门、年份、主页与联系方式管理员可以调整。管理员直接创建的成员不受此限制。
+- 邀请填写页不展示部门选择，提交后默认归入「软工集市」；管理员可在成员编辑中改为「iwiki」等选项。
+- 管理员可以直接添加成员，也可以**批量发送填写邀请**：搜索并多选 UniSSO 用户（含尚未在本平台注册的人），可预填头衔，系统为每人生成 14 天有效的专属链接并发送邮件；被邀请人通过 `/hall-invite/:token` 自行填写或更新资料，无需登录。SMTP 未配置时后台会显示链接，可复制手动发送。
+- 邀请未注册的 SSO 用户时，系统会先按 SSO 资料自动创建本地账号（`sso_sub` 匹配，邮箱必填、账号需激活），再发送邀请。
+- 同一用户只保留最新一个有效邀请；后台可查看状态（待填写 / 已提交 / 已过期 / 已撤销）、复制链接、重发或撤销。
+- 成员展示顺序由管理员在后台用「上移 / 下移」调整。
+- 页面标题、导语、名人堂章节标题与说明同样可在后台维护，保存后前台即时生效。
+- 初始章节内容是一次性的编辑模板，管理员清空后不会自动回灌。
+
 ### 圆桌与年度复审
 
 - 查看各部门席位占用、候补队列、圆桌成员。
@@ -145,9 +164,19 @@
 
 ## 四、登录与认证
 
-### UniSSO（同学主登录方式）
+### UniSSO 无感登录（主路径）
 
-OAuth2 Authorization Code + PKCE S256 / OIDC：
+登录页默认展示邮箱 + 密码表单，调用 `POST /api/auth/login`：
+
+1. 服务端调用 UniSSO `POST /api/oauth/password/verify`（M2M，携带 client_id / client_secret）；
+2. 成功响应按 `sub` upsert 本地用户，首次登录自动获得「软工集市开发者」身份；
+3. 签发本应用 HMAC 会话 Cookie（HttpOnly），并按 UniSSO 返回的 `sso_session / sso_cookie_name / sso_cookie_domain / sso_max_age` 种父域共享 Cookie；
+4. 401 / 403 / 429 分别透传「邮箱或密码错误 / 应用未开启无感登录 / 尝试过于频繁」；
+5. 管理员与普通用户共用该入口，后台权限只由 `JOIN_ADMIN_SUBS` 与站点配置决定。
+
+### OAuth 授权跳转（保留演示）
+
+登录页同时保留「统一身份授权登录（跳转演示）」，用于展示完整 OAuth2 Authorization Code + PKCE 流程：
 
 1. `/api/auth/sso/start` 生成一次性 `state` 与 PKCE verifier/challenge，302 到 UniSSO `authorize`。
 2. 回调 `/api/auth/sso/callback`；服务端用 `client_secret` + `code_verifier` 换 token。
@@ -155,10 +184,11 @@ OAuth2 Authorization Code + PKCE S256 / OIDC：
 4. 按 `sub` 建号或更新，**自动补齐开发者身份**，签发本应用 HMAC 会话（HttpOnly Cookie），302 回 `returnTo`。
 5. 不保存 UniSSO access token 作为本应用会话；`sse_sub` 仅作为外部 id 保存。
 
-### 管理员邮箱验证码（备用）
+静默 SSO（`POST /api/auth/sso/try`）仍用于管理员在父域已有 SSO 会话时免刷新进入后台。
 
-- 仅 `JOIN_ADMIN_EMAILS` / 站点配置里的超级管理员邮箱可用。
-- SMTP 发 6 位验证码；5 分钟有效、60 秒重发间隔。
+### M2M 用户目录
+
+管理员邀请名人堂成员时使用 `POST /api/oauth/users/list` 查询 UniSSO 全量用户（按姓名 / 邮箱 / 学号 / 开发者编号搜索）。该接口与密码校验使用同一套内接应用凭据，需要应用开启「无感登录」（m2m_enabled）；结果服务端缓存 60 秒。
 
 ### UniSSO 应用注册信息
 
@@ -186,11 +216,25 @@ UNISSO_DEFAULT_RETURN_TO=/me
 
 ## 五、简历与报名
 
-- **岗位筛选**：关键词、部门、岗位方向、参与类型、活动地点；默认排序 / 最新发布。
-- **在线简历**：基本信息、教育背景、工作/实习经历、项目经历、技能与自我评价。
-- **PDF 简历解析**：≤10MB PDF，服务端 pdfjs 提取文本并启发式预填；扫描件会提示手动填写。
+- **岗位筛选**：关键词、部门、岗位方向、参与类型、活动地点、常驻招聘；默认排序 / 最新发布。
+- **在线简历**：只保留学校社团真正需要的字段——姓名、年级、邮箱、简介（手机号选填）。修改后自动保存；新建时草稿保存在本机。
+- **PDF 简历解析**：≤10MB PDF，服务端先提取文本，再调用 AI（`JOIN_AI_*`，OpenAI 兼容接口）提取姓名、年级、邮箱、手机与简介；AI 不可用时回退到规则解析。扫描件会提示手动填写。
+- **常驻招聘（自动通过）**：岗位可标记为「常驻招聘」。报名时系统检查简历是否包含姓名、联系方式、教育背景、技能或项目经历；完整时立即通过并加入部门，不完整时返回缺失项提示。
 - **报名管理**：选择简历报名；同一岗位未通过/撤回后可重新报名；报名保存简历快照。
-- **双选确认**：部门通过后本人确认才进组；个人中心实时展示阶段。
+- **双选确认**：普通岗位部门通过后本人确认才进组；个人中心实时展示阶段。
+
+## 五之二、加入软工集市团队（通用入口）
+
+- 首页 / 部门岗位页提供「加入软工集市团队」入口，适合还不确定方向的同学。
+- 用户登录后，系统检查其默认简历是否包含姓名、联系方式、教育背景、技能或项目经历；不完整时引导去完善简历。
+- 信息完整后点击加入：调用 UniSSO `POST /api/oauth/developer/update` 把该用户标记为开发者（`is_developer=true`），同时在本地记录 `sso_developer`。
+- 接口幂等，可重复开通；SSO 不可用时返回明确错误，不静默成功。
+
+## 五之三、后台用户目录缓存
+
+- 后台的负责人 / 部门管理员 / 名人堂邀请等「选人」表单统一使用可搜索下拉，不再手填邮箱。
+- 服务端把 UniSSO 全量用户目录缓存到 Pod 本地存储（`sso_user_cache`，30 分钟 TTL，过期后台刷新），搜索只读缓存，避免每次按键都请求 SSO。
+- 前端再把合并后的目录缓存到 `sessionStorage`（10 分钟），打开下拉即时匹配；也可手动点「刷新」强制更新。
 
 ## 六、技术栈
 
@@ -248,6 +292,9 @@ cd ../web && npm run build      # vue-tsc + vite → web/dist
 | `SMTP_HOST/PORT/USER/PASS/FROM` | 邮箱登录必填 | 发验证码 |
 | `JOIN_MAIL_LOGIN` | 可选 | 管理员邮箱登录开关，默认 `true` |
 | `JOIN_RESUME_MAX_MB` | 可选 | PDF 大小上限，默认 `10` |
+| `JOIN_AI_API_URL` | 可选 | AI 简历解析接口，默认 `https://api.ssemarket.cn/v1/chat/completions` |
+| `JOIN_AI_API_KEY` | 可选 | AI 接口 Bearer Token（不落仓库，放 `.env`） |
+| `JOIN_AI_MODEL` | 可选 | 模型名，默认 `qwen-3.8-flash` |
 | `JOIN_PDF_MAX_PAGES` | 可选 | PDF 最多解析页数，默认 `30` |
 | `DEVELOPER_API_URL` | 可选 | 默认 `https://developer.ssemarket.cn` |
 | `PUBLIC_BASE` | 可选 | 站点公网根，默认 `https://join.ssemarket.cn` |
@@ -259,15 +306,23 @@ cd ../web && npm run build      # vue-tsc + vite → web/dist
 
 新增/扩展的核心表（JSON store）：
 
-- `users`：新增 `system_role`、`reviewer_role`、`developer_no`、`developer_level`、`primary_department_id`、`department_joined_at`、`roundtable_joined_at`、`status`、`developer_bio/skills/links`。
+- `users`：新增 `system_role`、`reviewer_role`、`developer_no`、`developer_level`、`primary_department_id`、`department_joined_at`、`roundtable_joined_at`、`status`、`developer_bio/skills/links`、`sso_developer`（已同步 UniSSO 开发者权限）、`sso_developer_at`。
+- `jobs`：新增 `auto_approve`（常驻招聘报名自动通过）；岗位方向 / 地点 / 招募对象 / 年级 / 时间投入在后台改为下拉选择。
 - `departments`：新增 `head_user_id`、`admin_user_ids`、`base_seats`、`floating_seats`、四项产出与 `output_note`。
+- `site_config`：新增 `teamTitle`、`teamIntro`（Markdown）、`teamHighlights`（每行一条）；团队介绍为空时首页不渲染对应区块。
+- `sso_user_cache`：UniSSO 全量用户目录的 Pod 内缓存（30 分钟 TTL），供后台选人下拉搜索。
 - `applications`：新增 `stage`（submitted/interview/offered/joined/rejected/withdrawn）、`interview_at/note`、`confirmed_at`、`joined_at`。
+- `resumes`：新增 `grade`（年级）；旧的 education/school/major 等字段保留兼容，前台不再要求填写。
 - `memberships`：部门成员关系与进出历史。
 - `defenses`：答辩单（陈述、资源分配主张、产出、状态、结论）。
 - `defense_reviews`：一级事实陈述、二级交叉评审、三级资源方评审。
 - `seat_reviews`：年度复审与退出记录。
+- `history_chapters`：集市年鉴章节（眉标、标题、摘要、年代、Markdown 正文、排序、显隐）。
+- `hall_of_fame`：名人堂成员（`user_id` 关联系统用户、姓名/头像快照、头衔、部门、年份、寄语、自我介绍、贡献、`user_submitted` 标记、集市主页与联系方式）。
+- `hall_invites`：名人堂资料填写邀请（用户、token、预填头衔、状态、有效期、发送与提交时间；部门默认软工集市）。
+- `history_settings`：年鉴页文案单例（页面标题、导语、名人堂章节标题与说明）。
 
-迁移：`schema_version = 6`，启动时幂等补齐；旧 `applications.status` 会映射到新的 `stage`（`passed → offered`，需本人确认才进组）。
+迁移：`schema_version = 16`，启动时幂等补齐；旧 `applications.status` 会映射到新的 `stage`（`passed → offered`，需本人确认才进组）。v15 补 `auto_approve`、团队介绍字段与 SSO 目录缓存，并隐藏公开问答里与技术部席位流程相关的旧条目；v16 补 `sso_developer` 字段，并把旧的「志愿者 / 社团成员」参与类型收敛为「团队成员」。
 
 ```text
 join-platform/
@@ -281,15 +336,19 @@ join-platform/
       auth.ts              # UniSSO + 管理员邮箱登录 + 自动开发者身份
       me.ts                # 个人中心 / 简历 / 身份 / 答辩 / 评审
       admin.ts             # 后台：成员权限、部门、岗位、报名、答辩、圆桌
-      faqs.ts / site.ts
+      faqs.ts / site.ts / history.ts / admin-history.ts
     services/
       org.ts               # 身份、部门成员、席位与公开画像
       defense.ts           # 多级答辩流水线、席位裁决、候补递补
+      hall.ts              # 名人堂部门选项与展示名
+      sso-users.ts         # SSO 用户目录匹配 / 邀请前自动建号
       pdf.ts / resume-parse.ts / mail.ts / session.ts
     unisso.ts / dev-platform.ts / storage.ts / config.ts
   web/src/
     views/
       HomeView / JobsView / JobDetailView / FaqView / LoginView
+      HistoryView          # 集市年鉴长文档 + 名人堂卡片与详情
+      HallInviteView       # 邮件邀请链接：本人填写名人堂资料
       MeView               # 个人主页 / 报名 / 简历
       TeamsView            # 席位与晋升公示
       PublicityDetailView  # 公示文档
@@ -301,6 +360,9 @@ join-platform/
       UsersPanel.vue       # 成员查询与角色/人事设置
       DefensesPanel.vue    # 答辩管理
       RoundtablePanel.vue  # 圆桌席位与年度复审
+      HistoryPanel.vue     # 年鉴章节、名人堂成员、填写邀请与排名
+      UserPicker.vue       # 本地注册用户搜索下拉（名人堂直接添加）
+      SsoUserPicker.vue    # UniSSO 用户多选（批量邀请，支持未注册自动建号）
   deploy.sh
 ```
 
@@ -308,6 +370,17 @@ join-platform/
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| GET | `/api/history` | 集市年鉴：页面文案、章节列表与名人堂（仅展示已启用项） |
+| GET/POST | `/api/history/invite/:token` | 读取邀请信息 / 提交本人名人堂资料 |
+| POST | `/api/auth/login` | 邮箱 + 密码无感登录（UniSSO M2M） |
+| GET | `/api/admin/history/meta` | 部门选项与 SMTP 配置状态 |
+| GET/POST | `/api/admin/history/invites` | 邀请列表 / 发送单个填写邀请 |
+| POST | `/api/admin/history/invites/batch` | 批量发送填写邀请（自动创建未注册 SSO 用户） |
+| GET | `/api/admin/history/sso-users` | 搜索 UniSSO 全量用户（含未注册，读 Pod 内缓存） |
+| GET | `/api/admin/directory/users` | 后台选人下拉：缓存 + 本地用户合并搜索（`registeredOnly=1` 仅本地账号） |
+| POST | `/api/admin/directory/refresh` | 强制刷新 UniSSO 用户目录缓存 |
+| POST/DELETE | `/api/admin/history/invites/:id/resend` `/invites/:id` | 重发 / 撤销邀请 |
+| POST | `/api/admin/history/hall/reorder` | 按 ids 顺序重写名人堂展示排名 |
 | GET | `/api/org/overview` | 身份层级、流程、部门席位、圆桌成员、统计 |
 | GET | `/api/org/departments/:slug` | 部门详情 + 成员列表 + 产出 |
 | GET | `/api/me/developer` | 个人主页、席位、答辩、待评审任务、部门履历 |
@@ -316,6 +389,8 @@ join-platform/
 | POST | `/api/me/defenses/:id/withdraw` | 撤回答辩 |
 | POST | `/api/me/reviews/:id` | 提交评审（一级事实 / 二三级投票） |
 | POST | `/api/me/applications/:id/confirm` | 本人确认部门双选 |
+| GET | `/api/me/join-team` | 通用加入入口的简历完整度 / 开发者权限状态 |
+| POST | `/api/me/join-team` | 检查简历完整后调用 UniSSO 开通开发者权限 |
 | GET | `/api/admin/users` | 用户搜索（角色/层级/部门/状态/分页） |
 | PATCH | `/api/admin/users/:id/role` | 设置超管、资源方、部门管理员、负责人 |
 | PATCH | `/api/admin/users/:id/identity` | 调整层级、部门、状态、简介 |
@@ -325,6 +400,11 @@ join-platform/
 | POST | `/api/admin/roundtable/:userId/review` | 年度复审 |
 | POST | `/api/admin/roundtable/:userId/exit` | 退出圆桌并释放席位 |
 | POST | `/api/admin/roundtable/promote` | 手动递补候补 |
+| GET/PUT | `/api/admin/history/settings` | 年鉴页文案（标题、导语、名人堂章节说明） |
+| GET/POST | `/api/admin/history/chapters` | 章节列表 / 新建章节 |
+| PUT/DELETE | `/api/admin/history/chapters/:id` | 更新 / 删除章节 |
+| GET/POST | `/api/admin/history/hall` | 名人堂成员列表 / 添加成员 |
+| PUT/DELETE | `/api/admin/history/hall/:id` | 更新 / 删除名人堂成员 |
 
 ## 十二、FAQ
 

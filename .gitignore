@@ -6,6 +6,7 @@ dist/
 data/
 *.db
 .env
+.env.bak-*
 server/.env
 web/.env
 .DS_Store

@@ -30,6 +30,14 @@
         </div>
       </section>
 
+      <RouterLink to="/join-team" class="join-team-banner">
+        <div class="join-team-copy">
+          <b>还不确定选哪个方向？</b>
+          <span>先加入软工集市团队，完善基本信息后自动成为开发者。</span>
+        </div>
+        <span class="join-team-cta">加入软工集市团队 →</span>
+      </RouterLink>
+
       <div class="jobs-layout">
         <aside class="filters">
           <div class="filter-group">
@@ -80,6 +88,19 @@
                 @click="toggle('type', t.value)"
               >
                 {{ t.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="filter-group">
+            <div class="filter-title">招聘类型</div>
+            <div class="filter-chips">
+              <button
+                class="chip"
+                :class="{ active: filters.auto === '1' }"
+                @click="toggleAuto"
+              >
+                常驻招聘 · 自动通过
               </button>
             </div>
           </div>
@@ -167,13 +188,13 @@ const filters = reactive({
   direction: String(route.query.direction || ''),
   type: String(route.query.type || ''),
   location: String(route.query.location || ''),
+  auto: String(route.query.auto || ''),
   sort: String(route.query.sort || ''),
 })
 
 const typeOptions = [
-  { value: 'fulltime', label: '社团成员' },
+  { value: 'fulltime', label: '团队成员' },
   { value: 'intern', label: '项目成员' },
-  { value: 'parttime', label: '志愿者' },
 ]
 
 const totalOpen = computed(() => {
@@ -190,6 +211,7 @@ const hasFilters = computed(() =>
       filters.direction ||
       filters.type ||
       filters.location ||
+      filters.auto ||
       filters.sort,
   ),
 )
@@ -203,6 +225,7 @@ const activeHint = computed(() => {
   if (filters.direction) parts.push(filters.direction)
   if (filters.type) parts.push(typeOptions.find((t) => t.value === filters.type)?.label || filters.type)
   if (filters.location) parts.push(filters.location)
+  if (filters.auto === '1') parts.push('常驻招聘')
   if (filters.q) parts.push(`“${filters.q}”`)
   return parts.join(' · ')
 })
@@ -250,12 +273,18 @@ function toggle(key: 'direction' | 'type' | 'location', value: string) {
   applyFilters()
 }
 
+function toggleAuto() {
+  filters.auto = filters.auto === '1' ? '' : '1'
+  applyFilters()
+}
+
 function clearFilters() {
   filters.q = ''
   filters.department = ''
   filters.direction = ''
   filters.type = ''
   filters.location = ''
+  filters.auto = ''
   filters.sort = ''
   applyFilters()
 }
@@ -280,6 +309,7 @@ watch(
       direction: String(q.direction || ''),
       type: String(q.type || ''),
       location: String(q.location || ''),
+      auto: String(q.auto || ''),
       sort: String(q.sort || ''),
     }
     const changed = (Object.keys(next) as Array<keyof typeof next>).some(
@@ -334,6 +364,38 @@ onUnmounted(() => {
 .jobs-search:focus-within {
   border-color: #c9cdd4;
   box-shadow: 0 0 0 4px rgba(23, 23, 23, 0.04);
+}
+.join-team-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  padding: 16px 18px;
+  margin-bottom: 28px;
+  border: 1px solid #e6efff;
+  border-radius: 12px;
+  background: var(--brand-tint);
+}
+.join-team-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.join-team-copy b {
+  font-size: 14px;
+}
+.join-team-copy span {
+  color: var(--ink-soft);
+  font-size: 12px;
+  line-height: 1.6;
+}
+.join-team-cta {
+  flex: none;
+  color: var(--brand);
+  font-size: 13px;
+  font-weight: 700;
 }
 .search-icon {
   color: var(--ink-faint);
@@ -400,6 +462,11 @@ onUnmounted(() => {
 }
 
 @media (max-width: 640px) {
+  .join-team-banner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
   .jobs-search {
     flex-wrap: wrap;
     padding: 10px;

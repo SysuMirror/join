@@ -57,27 +57,38 @@ export type SsoProbeResult = 'ok' | 'expired' | 'unavailable'
 let ssoProbePromise: Promise<SsoProbeResult> | null = null
 
 /**
- * 共享父域 sse_sso Cookie 探测（每次页面加载最多一次，首屏 / 路由守卫 / 登录页
- * 共享同一次请求：单飞，后到者 await 同一 Promise 而不是拿到空的降级结果）。
+ * 共享父域 SSO Cookie 探测（首屏 / 路由守卫 / 登录页共享同一次请求：单飞，
+ * 后到者 await 同一 Promise 而不是拿到空的降级结果）。
  * - ok：SSO 管理员身份已落地本地（token + user）；
  * - expired（401 no_sso/invalid_sso/not_internal/not_admin）：父域会话不可用；
- *   注意 not_admin 也可能是普通集市账号的 Cookie，路由守卫只对 staff 会话做单点登出；
+ *   调用方只能把它当作「没有可用的 SSO 会话」，不能据此推翻已建立的本地会话；
  * - unavailable（503 / 网络）：UniSSO 不可达，调用方保留本地会话，不踢人。
  */
 function probeSharedSso(): Promise<SsoProbeResult> {
   if (!ssoProbePromise) {
     ssoProbePromise = (async () => {
-      try {
-        const r = await api.ssoTry()
-        if (r?.user) {
-          localStorage.setItem('join_session_token', r.token)
-          setUser(r.user)
-          return 'ok' as const
+      // invalid_sso = 浏览器带了共享 Cookie 但 SSO 暂不认（常见于刚授权完的短暂
+      // 不一致）。隔一拍重试一次，避免把可用会话误判成失效；no_sso 不重试。
+      for (let attempt = 0; ; attempt += 1) {
+        try {
+          const r = await api.ssoTry()
+          if (r?.user) {
+            localStorage.setItem('join_session_token', r.token)
+            setUser(r.user)
+            return 'ok' as const
+          }
+          return 'unavailable' as const
+        } catch (e) {
+          const err = e as { status?: number; message?: string } | null
+          const status = err?.status
+          if (status === 401 && err?.message === 'invalid_sso' && attempt === 0) {
+            await new Promise((resolve) => setTimeout(resolve, 700))
+            continue
+          }
+          // 失败结果不缓存：下次调用（例如登录页在首屏探测之后）允许重新探测。
+          ssoProbePromise = null
+          return (status === 401 ? 'expired' : 'unavailable') as SsoProbeResult
         }
-        return 'unavailable' as const
-      } catch (e) {
-        const status = (e as { status?: number } | null)?.status
-        return (status === 401 ? 'expired' : 'unavailable') as SsoProbeResult
       }
     })()
   }
