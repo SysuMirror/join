@@ -2,7 +2,9 @@ import { Router } from 'express';
 import { db, now } from '../db.js';
 import { ok, fail, requireUser, getCurrentUser } from '../middleware.js';
 import { config } from '../config.js';
-import { ensureDeveloperProfile } from '../services/org.js';
+import { ensureDeveloperProfile, joinDepartment } from '../services/org.js';
+import { resumeMissingFields } from '../services/resume-check.js';
+import { syncUnissoDeveloper } from '../services/developer-sync.js';
 export const jobsRouter = Router();
 function tagsOf(job) {
     return (job.tags || '')
@@ -34,6 +36,7 @@ function mapJobPublic(job) {
         bonus: job.bonus,
         description: job.description,
         headcount: job.headcount,
+        auto_approve: job.auto_approve === 1,
         createdAt: job.created_at,
         updatedAt: job.updated_at,
     };
@@ -53,7 +56,10 @@ jobsRouter.get('/', (req, res) => {
     const type = String(req.query.type || '').trim();
     const location = String(req.query.location || '').trim();
     const sort = String(req.query.sort || '').trim();
+    const auto = String(req.query.auto || '').trim();
     let rows = db.getStore().jobs.filter((j) => j.enabled === 1);
+    if (auto === '1')
+        rows = rows.filter((j) => j.auto_approve === 1);
     if (q) {
         rows = rows.filter((j) => [j.title, j.department, j.summary, j.tags, j.description, j.responsibilities]
             .join(' ')
@@ -94,11 +100,11 @@ jobsRouter.get('/meta', (_req, res) => {
     }));
     ok(res, { directions, locations, departments, types: ['fulltime', 'intern', 'parttime'] });
 });
-/** GET /api/jobs/:slug — 单个职位详情（含相关职位） */
+/** GET /api/jobs/:key — 单个职位详情（支持数字 id / 旧 slug） */
 jobsRouter.get('/:slug', (req, res) => {
-    const slug = String(req.params.slug || '').trim().toLowerCase();
+    const key = String(req.params.slug || '').trim();
     const s = db.getStore();
-    const job = s.jobs.find((j) => j.slug === slug && j.enabled === 1);
+    const job = s.jobs.find((j) => (String(j.id) === key || j.slug === key.toLowerCase()) && j.enabled === 1);
     if (!job) {
         fail(res, 404, '岗位不存在或已关闭');
         return;
@@ -130,9 +136,9 @@ jobsRouter.get('/:slug', (req, res) => {
  * 双选流程：submitted → 部门约沟通/通过（offered）→ 本人确认（joined）。
  */
 jobsRouter.post('/:slug/apply', requireUser, async (req, res) => {
-    const slug = String(req.params.slug || '').trim().toLowerCase();
+    const key = String(req.params.slug || '').trim();
     const s = db.getStore();
-    const job = s.jobs.find((j) => j.slug === slug && j.enabled === 1);
+    const job = s.jobs.find((j) => (String(j.id) === key || j.slug === key.toLowerCase()) && j.enabled === 1);
     if (!job) {
         fail(res, 404, '岗位不存在或已关闭');
         return;
@@ -193,6 +199,7 @@ jobsRouter.post('/:slug/apply', requireUser, async (req, res) => {
         email: resume.email,
         city: resume.city,
         intention: resume.intention,
+        grade: resume.grade,
         education: resume.education,
         school: resume.school,
         major: resume.major,
@@ -205,6 +212,27 @@ jobsRouter.post('/:slug/apply', requireUser, async (req, res) => {
         education_experience: resume.education_experience,
         file_name: resume.file_name,
     };
+    // 常驻招聘：信息完整即自动通过，无需人工审核
+    const autoApprove = job.auto_approve === 1;
+    if (autoApprove) {
+        if (!dept) {
+            fail(res, 400, '该岗位未关联部门，暂时无法自动通过，请联系管理员');
+            return;
+        }
+        // 自动通过会直接把账号归入部门；已在其他部门的成员不走静默转部门
+        if (user.primary_department_id &&
+            user.primary_department_id !== dept.id &&
+            user.developer_level !== 'market') {
+            const current = s.departments.find((d) => d.id === user.primary_department_id);
+            fail(res, 409, `你已归属「${current?.name || '其他部门'}」，常驻招聘不支持自动转部门，请联系管理员`);
+            return;
+        }
+        const missing = resumeMissingFields(resume);
+        if (missing.length) {
+            fail(res, 400, `该岗位为常驻招聘，报名信息完整后将自动通过。请先补全简历：${missing.join('、')}`);
+            return;
+        }
+    }
     const t = now();
     const row = {
         id: db.nextId('applications'),
@@ -219,14 +247,14 @@ jobsRouter.post('/:slug/apply', requireUser, async (req, res) => {
         resume_url: '',
         resume_snapshot: JSON.stringify(snapshot),
         note,
-        status: 'pending',
-        stage: 'submitted',
+        status: autoApprove ? 'passed' : 'pending',
+        stage: autoApprove ? 'joined' : 'submitted',
         interview_at: '',
         interview_note: '',
-        confirmed_at: '',
-        joined_at: '',
-        review_note: '',
-        reviewer: '',
+        confirmed_at: autoApprove ? t : '',
+        joined_at: autoApprove ? t : '',
+        review_note: autoApprove ? '常驻招聘：简历信息完整，系统自动通过' : '',
+        reviewer: autoApprove ? 'system:auto' : '',
         oa_oid: '',
         oa_status: '',
         oa_checked_at: '',
@@ -234,8 +262,29 @@ jobsRouter.post('/:slug/apply', requireUser, async (req, res) => {
         created_at: t,
         updated_at: t,
     };
+    if (autoApprove && dept) {
+        await db.transaction(() => {
+            s.applications.push(row);
+            joinDepartment(user, dept, {
+                sourceApplicationId: row.id,
+                note: '常驻招聘自动通过',
+            });
+        });
+        // 进组即成为项目开发者，尽力同步 UniSSO 开发者标记（失败不阻断报名）
+        if (await syncUnissoDeveloper(user))
+            await db.persist();
+        ok(res, {
+            id: row.id,
+            status: row.status,
+            stage: row.stage,
+            auto_approved: true,
+            department: { id: dept.id, name: dept.name },
+            message: `报名成功，已自动通过并加入「${dept.name}」`,
+        }, `报名成功，已自动通过并加入「${dept.name}」`);
+        return;
+    }
     await db.insert('applications', row);
-    ok(res, { id: row.id, status: row.status, message: '报名成功，请等待联系' }, '报名成功');
+    ok(res, { id: row.id, status: row.status, stage: row.stage, message: '报名成功，请等待联系' }, '报名成功');
 });
 /** 提交时引用（供 admin 路由复用 OA push 逻辑） */
 export function buildOaBody(app, job) {
@@ -247,7 +296,7 @@ export function buildOaBody(app, job) {
         snap = {};
     }
     const str = (k) => (typeof snap[k] === 'string' ? String(snap[k]) : '');
-    const educationLine = [str('school'), str('education'), str('major'), str('graduation_year')]
+    const educationLine = [str('grade'), str('school'), str('education'), str('major')]
         .filter(Boolean)
         .join(' · ');
     return {
@@ -276,7 +325,7 @@ export function buildOaBody(app, job) {
             userId: app.user_id,
             resumeId: app.resume_id,
             source: 'join-platform',
-            publicUrl: `${config.publicBase}/jobs/${job.slug}`,
+            publicUrl: `${config.publicBase}/jobs/${job.id}`,
         },
     };
 }

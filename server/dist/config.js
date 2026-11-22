@@ -51,12 +51,23 @@ export const config = {
     },
     /** 登录会话签名密钥（由部署平台注入的随机长字符串） */
     sessionSecret: env('JOIN_SESSION_SECRET'),
+    /** AI 简历解析（OpenAI 兼容 chat/completions） */
+    ai: {
+        url: env('JOIN_AI_API_URL', 'https://api.ssemarket.cn/v1/chat/completions'),
+        apiKey: env('JOIN_AI_API_KEY'),
+        model: env('JOIN_AI_MODEL', 'qwen-3.8-flash'),
+        timeoutMs: Math.max(3000, Number(env('JOIN_AI_TIMEOUT_MS', '30000')) || 30_000),
+    },
     /** 超级管理员 UniSSO sub 白名单（逗号分隔；站点配置 adminSubs 会合并进来） */
     adminSubs: env('JOIN_ADMIN_SUBS'),
 };
 /** UniSSO 是否已配置（缺 client_id / client_secret 时登录页会提示未启用） */
 export function isUnissoConfigured() {
     return Boolean(config.unisso.clientId && config.unisso.clientSecret);
+}
+/** AI 简历解析是否已配置 */
+export function isAiConfigured() {
+    return Boolean(config.ai.url && config.ai.apiKey);
 }
 /** 用于 fail-fast 启动校验 */
 export function isDevPlatformConfigured() {

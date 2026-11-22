@@ -2,12 +2,16 @@ import { Router } from 'express';
 import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config } from '../config.js';
+import { config, isUnissoConfigured } from '../config.js';
+import { updateUnissoDeveloper } from '../unisso.js';
+import { syncUnissoDeveloper } from '../services/developer-sync.js';
 import { db, now } from '../db.js';
 import { ok, fail, requireUser, getCurrentUser, departmentAdminDepartments, } from '../middleware.js';
 import { extractPdfText, looksLikePdf } from '../services/pdf.js';
 import { parseResumeText } from '../services/resume-parse.js';
-import { departmentSeatStats, isStaffUser, isSuperAdminUser, joinDepartment, userIdentityView, } from '../services/org.js';
+import { parseResumeWithAi } from '../services/ai-resume.js';
+import { resumeMissingFields } from '../services/resume-check.js';
+import { departmentSeatStats, ensureDeveloperProfile, isStaffUser, isSuperAdminUser, joinDepartment, userIdentityView, } from '../services/org.js';
 import { canViewDefense, createDefense, defenseView, submitReview, } from '../services/defense.js';
 export const meRouter = Router();
 function str(v, max) {
@@ -30,6 +34,7 @@ function parseSnapshot(json) {
     }
 }
 function mapResume(r, withText = false) {
+    const missing = resumeMissingFields(r);
     return {
         id: r.id,
         title: r.title,
@@ -38,6 +43,7 @@ function mapResume(r, withText = false) {
         email: r.email,
         city: r.city,
         intention: r.intention,
+        grade: r.grade,
         education: r.education,
         school: r.school,
         major: r.major,
@@ -53,6 +59,8 @@ function mapResume(r, withText = false) {
         has_file: Boolean(r.file_path),
         parse_note: r.parse_note,
         parsed_text: withText ? r.parsed_text : undefined,
+        complete: missing.length === 0,
+        missing_fields: missing,
         is_default: r.is_default === 1,
         created_at: r.created_at,
         updated_at: r.updated_at,
@@ -162,6 +170,79 @@ meRouter.get('/overview', requireUser, (req, res) => {
         rejected: apps.filter((a) => a.status === 'rejected').length,
     });
 });
+// ===== 加入软工集市团队（通用开发者入口） =====
+function teamResumeFor(userId, resumeId = 0) {
+    const own = db.getStore().resumes.filter((r) => r.user_id === userId);
+    if (resumeId)
+        return own.find((r) => r.id === resumeId) || null;
+    return own.find((r) => r.is_default === 1) || [...own].sort((a, b) => b.id - a.id)[0] || null;
+}
+meRouter.get('/join-team', requireUser, (req, res) => {
+    const user = getCurrentUser(req);
+    const resume = teamResumeFor(user.id);
+    const missing = resume ? resumeMissingFields(resume) : ['简历'];
+    ok(res, {
+        ready: Boolean(resume) && missing.length === 0,
+        resume_id: resume?.id || 0,
+        missing_fields: missing,
+        sso_developer: user.sso_developer === 1,
+        sso_developer_at: user.sso_developer_at || '',
+        email: user.email || resume?.email || '',
+    });
+});
+meRouter.post('/join-team', requireUser, async (req, res) => {
+    const user = getCurrentUser(req);
+    if (user.status !== 'active') {
+        fail(res, 403, '账号已退出，请联系管理员后再加入');
+        return;
+    }
+    const b = (req.body || {});
+    const resume = teamResumeFor(user.id, Number(b.resume_id) || 0);
+    if (!resume) {
+        fail(res, 400, '请先在「我的简历」中创建一份简历');
+        return;
+    }
+    const missing = resumeMissingFields(resume);
+    if (missing.length) {
+        res.status(400).json({
+            code: 400,
+            message: `请先完善简历：${missing.join('、')}`,
+            data: { missing_fields: missing, resume_id: resume.id },
+        });
+        return;
+    }
+    const email = (user.email || resume.email || '').trim().toLowerCase();
+    if (!email) {
+        fail(res, 400, '账号缺少邮箱，无法开通开发者权限，请联系管理员');
+        return;
+    }
+    if (!isUnissoConfigured()) {
+        fail(res, 503, '统一身份未配置，暂时无法开通开发者权限');
+        return;
+    }
+    try {
+        const result = await updateUnissoDeveloper(email, true);
+        if (!result.ok || result.status >= 400 || result.developer === false) {
+            fail(res, 502, result.message || result.error || `开通开发者权限失败（HTTP ${result.status}）`);
+            return;
+        }
+    }
+    catch (e) {
+        fail(res, 502, e instanceof Error ? e.message : '开通开发者权限失败');
+        return;
+    }
+    const t = now();
+    ensureDeveloperProfile(user);
+    user.sso_developer = 1;
+    user.sso_developer_at = t;
+    await db.persist();
+    ok(res, {
+        developer: true,
+        identity: userIdentityView(user),
+        resume_id: resume.id,
+        sso_developer_at: t,
+    }, '你已成为软工集市开发者');
+});
 // ===== 我的开发者身份 / 成长路径 =====
 meRouter.get('/developer', requireUser, (req, res) => {
     const user = getCurrentUser(req);
@@ -237,6 +318,7 @@ meRouter.post('/applications/:id/confirm', requireUser, async (req, res) => {
     }
     const t = now();
     joinDepartment(user, dept, { sourceApplicationId: app.id, note: '部门双选确认' });
+    await syncUnissoDeveloper(user);
     app.stage = 'joined';
     app.status = 'passed';
     app.confirmed_at = t;
@@ -399,6 +481,7 @@ meRouter.post('/resumes', requireUser, async (req, res) => {
         email: str(b.email, 200) || user.email,
         city: str(b.city, 60),
         intention: str(b.intention, 100),
+        grade: str(b.grade, 20),
         education: str(b.education, 40),
         school: str(b.school, 100),
         major: str(b.major, 100),
@@ -440,6 +523,7 @@ meRouter.put('/resumes/:id', requireUser, async (req, res) => {
         ['email', 200],
         ['city', 60],
         ['intention', 100],
+        ['grade', 20],
         ['education', 40],
         ['school', 100],
         ['major', 100],
@@ -541,6 +625,7 @@ meRouter.post('/resumes/upload', requireUser, async (req, res) => {
     fs.mkdirSync(path.dirname(absPath), { recursive: true });
     fs.writeFileSync(absPath, buf);
     let parsed = null;
+    let aiParsed = null;
     let note = '';
     let pages = 0;
     let extractedText = '';
@@ -552,7 +637,12 @@ meRouter.post('/resumes/upload', requireUser, async (req, res) => {
             note = '未能从 PDF 中提取到文本（可能是扫描件/图片型 PDF），请手动填写简历信息。';
         }
         else {
+            // 规则解析先兜底，再调用 AI 提取核心字段；AI 不可用时仍能创建简历
             parsed = parseResumeText(result.text, fileName);
+            aiParsed = await parseResumeWithAi(result.text);
+            note = aiParsed
+                ? 'AI 已自动解析简历，请检查并补充不准确的内容。'
+                : 'AI 解析暂不可用，已按规则预填，请检查并补充。';
         }
     }
     catch (e) {
@@ -562,26 +652,44 @@ meRouter.post('/resumes/upload', requireUser, async (req, res) => {
     const s = db.getStore();
     const own = s.resumes.filter((r) => r.user_id === user.id);
     const t = now();
-    const name = parsed?.name || user.name;
-    const row = {
-        id: db.nextId('resumes'),
-        user_id: user.id,
-        title: name ? `${name}的简历` : fileName.replace(/\.pdf$/i, ''),
+    const name = aiParsed?.name || parsed?.name || user.name;
+    const merged = {
         name,
-        phone: parsed?.phone || '',
-        email: parsed?.email || user.email,
+        grade: aiParsed?.grade || '',
+        email: aiParsed?.email || parsed?.email || user.email,
+        phone: aiParsed?.phone || parsed?.phone || '',
+        summary: aiParsed?.summary || parsed?.summary || '',
         city: parsed?.city || '',
         intention: parsed?.intention || '',
         education: parsed?.education || '',
         school: parsed?.school || '',
         major: parsed?.major || '',
         graduation_year: parsed?.graduation_year || '',
-        experience_years: parsed?.experience_years || 0,
         skills: parsed?.skills || '',
-        summary: parsed?.summary || '',
         work_experience: parsed?.work_experience || '',
         project_experience: parsed?.project_experience || '',
         education_experience: parsed?.education_experience || '',
+    };
+    const row = {
+        id: db.nextId('resumes'),
+        user_id: user.id,
+        title: name ? `${name}的简历` : fileName.replace(/\.pdf$/i, ''),
+        name,
+        phone: merged.phone,
+        email: merged.email,
+        city: merged.city,
+        intention: merged.intention,
+        grade: merged.grade,
+        education: merged.education,
+        school: merged.school,
+        major: merged.major,
+        graduation_year: merged.graduation_year,
+        experience_years: parsed?.experience_years || 0,
+        skills: merged.skills,
+        summary: merged.summary,
+        work_experience: merged.work_experience,
+        project_experience: merged.project_experience,
+        education_experience: merged.education_experience,
         file_path: relPath,
         file_name: fileName,
         file_size: buf.length,
@@ -597,7 +705,7 @@ meRouter.post('/resumes/upload', requireUser, async (req, res) => {
     await db.persist();
     ok(res, {
         resume: mapResume(row, true),
-        parsed,
+        parsed: merged,
         pages,
         warning: note,
     }, note || '简历已上传并解析');

@@ -1,13 +1,16 @@
+import './polyfills.js';
 import { loadEnvFile } from './load-env.js';
 loadEnvFile();
 import express from 'express';
 import cors from 'cors';
 import fs from 'node:fs';
 import path from 'node:path';
-import { config, isDevPlatformConfigured, isUnissoConfigured, } from './config.js';
+import { config, isAiConfigured, isDevPlatformConfigured, isUnissoConfigured, } from './config.js';
 import { initDb, ensureSeeds, db } from './db.js';
 import { ensureDeveloperProfile, mergeDuplicateEmailAccounts } from './services/org.js';
 import { storeBackendLabel, isMinioConfigured } from './storage.js';
+import { isMailConfigured } from './services/mail.js';
+import { refreshSsoDirectory, warmUserDirectory } from './services/user-directory.js';
 import { jobsRouter } from './routes/jobs.js';
 import { departmentsRouter } from './routes/departments.js';
 import { faqsRouter } from './routes/faqs.js';
@@ -16,6 +19,8 @@ import { authRouter } from './routes/auth.js';
 import { siteRouter } from './routes/site.js';
 import { meRouter } from './routes/me.js';
 import { orgRouter } from './routes/org.js';
+import { historyRouter } from './routes/history.js';
+import { adminHistoryRouter } from './routes/admin-history.js';
 const app = express();
 const corsOrigins = (process.env.JOIN_CORS_ORIGINS || 'http://localhost:5175,http://localhost:8080')
     .split(',')
@@ -45,6 +50,7 @@ app.get('/api/health', (_req, res) => {
             service: 'join-platform',
             devPlatformConfigured: isDevPlatformConfigured(),
             ssoConfigured: isUnissoConfigured(),
+            mailConfigured: isMailConfigured(),
             store: storeBackendLabel(),
             time: new Date().toISOString(),
         },
@@ -53,6 +59,8 @@ app.get('/api/health', (_req, res) => {
 app.use('/api/jobs', jobsRouter);
 app.use('/api/departments', departmentsRouter);
 app.use('/api/faqs', faqsRouter);
+app.use('/api/history', historyRouter);
+app.use('/api/admin/history', adminHistoryRouter);
 app.use('/api/admin', adminRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/site', siteRouter);
@@ -147,7 +155,16 @@ app.listen(config.port, '0.0.0.0', () => {
     console.log(`[join] frontend=${dist} exists=${frontendDistExists}`);
     console.log(`[join] devPlatform=${config.devPlatform.baseUrl} slug=${config.devPlatform.moduleSlug}`);
     console.log(`[join] unisso=${isUnissoConfigured() ? 'configured' : 'NOT configured'} issuer=${config.unisso.issuer} redirect=${config.unisso.redirectUri}`);
+    console.log(`[join] mail=${isMailConfigured() ? 'configured' : 'NOT configured'} ai=${isAiConfigured() ? `configured model=${config.ai.model}` : 'NOT configured'}`);
     if (!isMinioConfigured()) {
         console.log('[join] MinIO 未配置：简历附件保存在 DATA_DIR/uploads（持久化盘）');
     }
+    // 用户目录缓存：启动后预热，之后每 30 分钟后台刷新一次（失败不影响服务）
+    warmUserDirectory();
+    const timer = setInterval(() => {
+        void refreshSsoDirectory().catch((e) => {
+            console.warn(`[directory] 定时刷新失败：${e instanceof Error ? e.message : e}`);
+        });
+    }, 30 * 60_000);
+    timer.unref?.();
 });

@@ -18,6 +18,9 @@ siteRouter.get('/', (_req, res) => {
         tagline: c.tagline,
         contactEmail: c.contactEmail,
         bgWords: c.bgWords,
+        teamTitle: c.teamTitle,
+        teamIntro: c.teamIntro,
+        teamHighlights: c.teamHighlights,
         updatedAt: c.updated_at,
         stats: {
             openJobs,
