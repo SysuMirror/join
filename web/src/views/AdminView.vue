@@ -167,11 +167,8 @@
         <section v-show="tab === 'applications'" class="card panel admin-section">
           <div class="row-between">
             <h3>报名审核</h3>
-            <button class="btn btn-ghost btn-sm" :disabled="refreshing" @click="refreshOa">
-              {{ refreshing ? '刷新中…' : '刷新审批状态' }}
-            </button>
           </div>
-          <p class="hint">初审通过后会自动提交内部审批；驳回会记录意见。</p>
+          <p class="hint">报名审核与部门双选；驳回会记录意见。</p>
           <div class="toolbar">
             <input v-model="appsFilter.q" class="search" placeholder="搜索报名同学 / 邮箱 / 手机…" @input="loadApplications" />
             <select v-model="appsFilter.status" @change="loadApplications">
@@ -824,7 +821,6 @@ const copiedText = ref('')
 const saving = ref(false)
 const modalError = ref('')
 const appError = ref('')
-const refreshing = ref(false)
 const siteSaving = ref(false)
 
 const adminMe = ref<AdminSession | null>(null)
@@ -1297,18 +1293,6 @@ async function reject(a: AdminApplication) {
   }
 }
 
-async function refreshOa() {
-  refreshing.value = true
-  try {
-    const r = await api.adminRefreshOa()
-    showNotice(`已刷新 ${r.refreshed ?? 0} 条申请`)
-    await Promise.all([loadApplications(), loadStats()])
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : '刷新失败'
-  } finally {
-    refreshing.value = false
-  }
-}
 
 function openResumePdf(a: AdminApplication) {
   if (!a.resume_id) return

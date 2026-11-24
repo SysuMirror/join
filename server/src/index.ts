@@ -28,6 +28,7 @@ import { meRouter } from './routes/me.js'
 import { orgRouter } from './routes/org.js'
 import { historyRouter } from './routes/history.js'
 import { adminHistoryRouter } from './routes/admin-history.js'
+import { developerRouter } from './routes/developer.js'
 
 const app = express()
 
@@ -80,6 +81,7 @@ app.use('/api/auth', authRouter)
 app.use('/api/site', siteRouter)
 app.use('/api/me', meRouter)
 app.use('/api/org', orgRouter)
+app.use('/api/developer', developerRouter)
 
 // 未匹配的 /api 请求返回 JSON，而不是落进 SPA 的 index.html
 app.use('/api', (_req, res) => {
@@ -154,10 +156,8 @@ async function syncIdentityAndAdmins(): Promise<void> {
 
 await syncIdentityAndAdmins()
 
-// 启动校验：会话密钥是登录态硬依赖；开发者平台模块身份用于 OA 自动审批
+// 启动校验：会话密钥是登录态硬依赖；开发者平台接入缺失时只降级（相关接口 503），不阻断启动
 const missingEnv: string[] = []
-if (!config.devPlatform.moduleSlug) missingEnv.push('JOIN_DEV_MODULE_SLUG')
-if (!config.devPlatform.modulePrivateKey) missingEnv.push('JOIN_DEV_MODULE_PRIVATE_KEY')
 if (!config.sessionSecret) missingEnv.push('JOIN_SESSION_SECRET')
 if (missingEnv.length) {
   console.error(
@@ -171,7 +171,9 @@ app.listen(config.port, '0.0.0.0', () => {
   console.log(`[join] listening on 0.0.0.0:${config.port}`)
   console.log(`[join] store=${storeBackendLabel()} local_backup=${config.dataDir}/join-store.json`)
   console.log(`[join] frontend=${dist} exists=${frontendDistExists}`)
-  console.log(`[join] devPlatform=${config.devPlatform.baseUrl} slug=${config.devPlatform.moduleSlug}`)
+  console.log(
+    `[join] devPlatform=${config.devPlatform.baseUrl} join=${isDevPlatformConfigured() ? 'configured' : 'NOT configured (JOIN_API_KEY)'}`,
+  )
   console.log(
     `[join] unisso=${isUnissoConfigured() ? 'configured' : 'NOT configured'} issuer=${config.unisso.issuer} redirect=${config.unisso.redirectUri}`,
   )

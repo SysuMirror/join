@@ -17,6 +17,7 @@ import {
   readSsoSession,
 } from '../middleware.js'
 import { createSessionToken } from '../services/session.js'
+import { autoGrantDeveloperOnLogin } from '../services/developer-sync.js'
 import {
   developerNoFor,
   ensureDeveloperProfile,
@@ -153,6 +154,8 @@ async function persistUnissoLogin(u: UnissoUserClaims, email: string): Promise<U
     if (!user.sso_developer_at) user.sso_developer_at = t
   }
   ensureDeveloperProfile(user)
+  // 登录即自动开通开发者权限，无需再走「加入软工集市团队」申请
+  await autoGrantDeveloperOnLogin(user)
   await db.persist()
   return user
 }
@@ -353,6 +356,8 @@ authRouter.get('/sso/callback', async (req, res) => {
     }
     // 底座：注册/登录即成为「软工集市开发者」，无需审批
     ensureDeveloperProfile(user)
+    // 登录即自动开通 UniSSO 开发者权限，无需再申请加入团队
+    await autoGrantDeveloperOnLogin(user)
     await db.persist()
 
     const sessionToken = createSessionToken({ uid: user.id, email: user.email })

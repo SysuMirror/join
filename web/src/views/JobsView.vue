@@ -33,9 +33,9 @@
       <RouterLink to="/join-team" class="join-team-banner">
         <div class="join-team-copy">
           <b>还不确定选哪个方向？</b>
-          <span>先加入软工集市团队，完善基本信息后自动成为开发者。</span>
+          <span>登录集市统一身份即自动成为软工集市开发者，不需要单独申请。</span>
         </div>
-        <span class="join-team-cta">加入软工集市团队 →</span>
+        <span class="join-team-cta">查看开发者身份 →</span>
       </RouterLink>
 
       <div class="jobs-layout">

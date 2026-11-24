@@ -1,7 +1,6 @@
 import { Router } from 'express'
 import { db, now, type ApplicationRow, type JobRow, type ResumeRow } from '../db.js'
 import { ok, fail, requireUser, getCurrentUser } from '../middleware.js'
-import { config } from '../config.js'
 import { ensureDeveloperProfile, joinDepartment } from '../services/org.js'
 import { resumeMissingFields } from '../services/resume-check.js'
 import { syncUnissoDeveloper } from '../services/developer-sync.js'
@@ -326,51 +325,3 @@ jobsRouter.post('/:slug/apply', requireUser, async (req, res) => {
   )
 })
 
-/** 提交时引用（供 admin 路由复用 OA push 逻辑） */
-export function buildOaBody(app: ApplicationRow, job: JobRow): {
-  oaid: string
-  title: string
-  content: string
-  extra: Record<string, unknown>
-} {
-  let snap: Record<string, unknown> = {}
-  try {
-    snap = app.resume_snapshot ? (JSON.parse(app.resume_snapshot) as Record<string, unknown>) : {}
-  } catch {
-    snap = {}
-  }
-  const str = (k: string) => (typeof snap[k] === 'string' ? String(snap[k]) : '')
-  const educationLine = [str('grade'), str('school'), str('education'), str('major')]
-    .filter(Boolean)
-    .join(' · ')
-
-  return {
-    oaid: `join-${app.id}`,
-    title: `成员申请：${job.title}（${app.name || '匿名'}）`,
-    content: [
-      app.name ? `报名同学：${app.name}` : '报名同学：（未填写）',
-      app.email ? `邮箱：${app.email}` : '',
-      app.phone ? `手机：${app.phone}` : '',
-      app.wechat ? `微信：${app.wechat}` : '',
-      app.contact ? `联系方式：${app.contact}` : '',
-      `报名岗位：${job.title}（${job.department || ''}）`,
-      educationLine ? `教育背景：${educationLine}` : '',
-      str('skills') ? `技能：${str('skills')}` : '',
-      str('file_name') ? `简历附件：${str('file_name')}` : '简历：在线简历',
-      app.note ? `自述：${app.note}` : '',
-    ]
-      .filter(Boolean)
-      .join('\n'),
-    extra: {
-      jobId: job.id,
-      jobSlug: job.slug,
-      jobTitle: job.title,
-      department: job.department,
-      applicationId: app.id,
-      userId: app.user_id,
-      resumeId: app.resume_id,
-      source: 'join-platform',
-      publicUrl: `${config.publicBase}/jobs/${job.id}`,
-    },
-  }
-}

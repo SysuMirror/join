@@ -339,6 +339,7 @@ export type UnissoDeveloperUpdateResult = {
 export async function updateUnissoDeveloper(
   email: string,
   isDeveloper = true,
+  timeoutMs = 12_000,
 ): Promise<UnissoDeveloperUpdateResult> {
   const target = String(email || '').trim().toLowerCase()
   if (!target) {
@@ -354,7 +355,7 @@ export async function updateUnissoDeveloper(
   }
   const res = await fetchWithTimeout(
     `${config.unisso.issuer}/api/oauth/developer/update`,
-    12_000,
+    timeoutMs,
     {
       method: 'POST',
       headers: { 'content-type': 'application/json', accept: 'application/json' },

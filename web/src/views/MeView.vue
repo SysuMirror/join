@@ -338,7 +338,7 @@
                     <dd>
                       {{ user?.sso_developer ? '已同步到统一身份' : '未开通' }}
                       <RouterLink v-if="!user?.sso_developer" class="inline-action" to="/join-team">
-                        去开通
+                        重试开通
                       </RouterLink>
                     </dd>
                   </div>

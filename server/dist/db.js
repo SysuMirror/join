@@ -12,9 +12,13 @@ const SEQ_KEYS = [
     'defense_reviews',
     'seat_reviews',
     'publicities',
+    'history_chapters',
+    'hall_of_fame',
+    'hall_invites',
+    'dev_applications',
 ];
 /** 数据结构版本：用于只执行一次的旧数据补齐（避免每次启动覆盖管理员的手工修改） */
-const SCHEMA_VERSION = 7;
+const SCHEMA_VERSION = 16;
 /** 旧职位只有一段 description 时，按标题拆成职责/要求 */
 function splitLegacyDescription(desc) {
     const text = String(desc || '')
@@ -60,6 +64,19 @@ function emptySeq() {
         defense_reviews: 0,
         seat_reviews: 0,
         publicities: 0,
+        history_chapters: 0,
+        hall_of_fame: 0,
+        hall_invites: 0,
+        dev_applications: 0,
+    };
+}
+function defaultHistorySettings() {
+    return {
+        title: '软工集市年鉴',
+        subtitle: '从第一行代码到今天的开发者平台，记录一群人如何把想法做出来。',
+        hall_title: '名人堂',
+        hall_intro: '记录曾为软工集市做出重要贡献的成员。点击卡片，查看他们的集市主页、招聘主页资料与联系方式。',
+        updated_at: nowIso(),
     };
 }
 function defaultSiteConfig() {
@@ -71,6 +88,10 @@ function defaultSiteConfig() {
         tagline: '和一群热爱技术的人，一起把想法做出来',
         contactEmail: 'ssemarket@163.com',
         bgWords: '技术 · 创造 · 热爱 · 成长',
+        teamTitle: '关于我们',
+        // 首页团队介绍由管理员在后台撰写；留空时前台不渲染该区块
+        teamIntro: '',
+        teamHighlights: '',
         adminSubs: '',
         updated_at: nowIso(),
     };
@@ -91,7 +112,13 @@ function emptyStore() {
         defense_reviews: [],
         seat_reviews: [],
         publicities: [],
+        history_chapters: [],
+        hall_of_fame: [],
+        hall_invites: [],
+        history_settings: defaultHistorySettings(),
         site_config: defaultSiteConfig(),
+        sso_user_cache: { updated_at: '', users: [] },
+        dev_applications: [],
     };
 }
 /** 把旧数据补齐到当前 schema；每次加载都执行，幂等。 */
@@ -128,6 +155,97 @@ function migrate(s) {
         s.seat_reviews = [];
     if (!s.publicities)
         s.publicities = [];
+    if (!s.history_chapters)
+        s.history_chapters = [];
+    if (!s.hall_of_fame)
+        s.hall_of_fame = [];
+    if (!s.hall_invites)
+        s.hall_invites = [];
+    if (!s.sso_user_cache)
+        s.sso_user_cache = { updated_at: '', users: [] };
+    if (!Array.isArray(s.sso_user_cache.users))
+        s.sso_user_cache.users = [];
+    if (!Array.isArray(s.dev_applications))
+        s.dev_applications = [];
+    if (s.sso_user_cache.updated_at == null)
+        s.sso_user_cache.updated_at = '';
+    const hsDef = defaultHistorySettings();
+    if (!s.history_settings)
+        s.history_settings = hsDef;
+    for (const k of ['title', 'subtitle', 'hall_title', 'hall_intro', 'updated_at']) {
+        if (s.history_settings[k] == null)
+            s.history_settings[k] = hsDef[k];
+    }
+    for (const c of s.history_chapters) {
+        if (c.kicker == null)
+            c.kicker = '';
+        if (c.title == null)
+            c.title = '';
+        if (c.summary == null)
+            c.summary = '';
+        if (c.era == null)
+            c.era = '';
+        if (c.content == null)
+            c.content = '';
+        if (c.sort_order == null || !Number.isFinite(Number(c.sort_order)))
+            c.sort_order = 0;
+        else
+            c.sort_order = Number(c.sort_order);
+        if (c.enabled == null)
+            c.enabled = 1;
+    }
+    for (const h of s.hall_of_fame) {
+        if (h.user_id == null || !Number.isFinite(Number(h.user_id)))
+            h.user_id = 0;
+        else
+            h.user_id = Number(h.user_id);
+        for (const k of [
+            'name',
+            'avatar',
+            'title',
+            'department',
+            'year',
+            'quote',
+            'bio',
+            'achievements',
+            'market_url',
+            'contact_email',
+            'contact_wechat',
+            'contact_other',
+        ]) {
+            if (h[k] == null)
+                h[k] = '';
+        }
+        if (h.sort_order == null || !Number.isFinite(Number(h.sort_order)))
+            h.sort_order = 0;
+        else
+            h.sort_order = Number(h.sort_order);
+        if (h.enabled == null)
+            h.enabled = 1;
+        h.user_submitted = Number(h.user_submitted) === 1 ? 1 : 0;
+    }
+    for (const inv of s.hall_invites) {
+        if (inv.user_id == null || !Number.isFinite(Number(inv.user_id)))
+            inv.user_id = 0;
+        else
+            inv.user_id = Number(inv.user_id);
+        for (const k of [
+            'token',
+            'department',
+            'title',
+            'expires_at',
+            'created_by',
+            'created_at',
+            'sent_at',
+            'submitted_at',
+        ]) {
+            if (inv[k] == null)
+                inv[k] = '';
+        }
+        if (!['pending', 'submitted', 'revoked'].includes(String(inv.status))) {
+            inv.status = 'pending';
+        }
+    }
     // 旧版本没有 schema_version：按版本号执行一次性补齐
     const version = Number(s.schema_version) || 0;
     for (const j of s.jobs) {
@@ -165,6 +283,10 @@ function migrate(s) {
             j.description = '';
         if (j.headcount == null || !Number.isFinite(Number(j.headcount)))
             j.headcount = 0;
+        if (j.auto_approve == null)
+            j.auto_approve = 0;
+        else
+            j.auto_approve = Number(j.auto_approve) === 1 ? 1 : 0;
         if (j.enabled == null)
             j.enabled = 1;
         if (j.sort_order == null)
@@ -308,6 +430,12 @@ function migrate(s) {
             u.developer_skills = '';
         if (u.developer_links == null)
             u.developer_links = '';
+        if (u.sso_developer == null)
+            u.sso_developer = 0;
+        else
+            u.sso_developer = Number(u.sso_developer) === 1 ? 1 : 0;
+        if (u.sso_developer_at == null)
+            u.sso_developer_at = '';
     }
     for (const r of s.resumes) {
         if (r.title == null)
@@ -322,6 +450,8 @@ function migrate(s) {
             r.city = '';
         if (r.intention == null)
             r.intention = '';
+        if (r.grade == null)
+            r.grade = '';
         if (r.education == null)
             r.education = '';
         if (r.school == null)
@@ -422,6 +552,9 @@ function migrate(s) {
         'tagline',
         'contactEmail',
         'bgWords',
+        'teamTitle',
+        'teamIntro',
+        'teamHighlights',
         'adminSubs',
     ]) {
         if (sc[k] == null)
@@ -503,6 +636,93 @@ function migrate(s) {
                 d.admin_user_ids = ids.join(',');
                 if (!d.head_user_id)
                     d.head_user_id = ids[0];
+            }
+        }
+    }
+    // v9：历史页更名「年鉴」；只在标题仍是旧默认值时替换，保留管理员自定义
+    if (version < 9) {
+        if (s.history_settings.title === '软工集市历史') {
+            s.history_settings.title = '软工集市年鉴';
+            s.history_settings.updated_at = nowIso();
+        }
+    }
+    // v14：名人堂区分本人填写（寄语/自我介绍）与管理员维护字段；
+    // 已有 submitted 邀请的成员视为本人填写。
+    if (version < 14) {
+        const submittedUserIds = new Set(s.hall_invites.filter((i) => i.status === 'submitted').map((i) => i.user_id));
+        for (const h of s.hall_of_fame) {
+            if (h.user_submitted !== 1 && submittedUserIds.has(h.user_id))
+                h.user_submitted = 1;
+        }
+    }
+    // v15：公开首页收敛为招聘页；隐藏旧问答里「技术部 / 圆桌 / 席位」流程说明
+    if (version < 15) {
+        const retired = new Set([
+            '技术部（圆桌）答辩怎么进行？',
+            '技术部席位如何分配？会退出吗？',
+        ]);
+        for (const f of s.faqs) {
+            if (retired.has(f.question))
+                f.enabled = 0;
+            f.answer = (f.answer || '').replace(/社团成员/g, '团队成员');
+        }
+        // 团队介绍默认留空：由管理员撰写后才在首页展示
+        if (s.site_config.teamIntro === '软工集市是一群热爱技术、愿意把想法真正做出来的同学。我们承接真实项目，也欢迎新的伙伴一起加入。') {
+            s.site_config.teamIntro = '';
+        }
+        if (s.site_config.teamHighlights === '做真实项目\n扁平协作\n一起成长') {
+            s.site_config.teamHighlights = '';
+        }
+    }
+    // v16：参与类型收敛为「团队成员 / 项目成员」；问答文案同步
+    if (version < 16) {
+        for (const j of s.jobs) {
+            if (j.type === 'parttime')
+                j.type = 'fulltime';
+        }
+        for (const f of s.faqs) {
+            f.answer = (f.answer || '').replace(/社团成员/g, '团队成员');
+        }
+    }
+    // v13：名人堂「简介 + 主要贡献」合并为单一介绍字段
+    if (version < 13) {
+        for (const h of s.hall_of_fame) {
+            const extra = (h.achievements || '').trim();
+            if (extra) {
+                h.bio = [(h.bio || '').trim(), extra].filter(Boolean).join('\n\n');
+                h.achievements = '';
+            }
+        }
+    }
+    // v12：名人堂章节说明改为更自然的表述；只替换旧默认值
+    if (version < 12) {
+        const oldHallIntro = '那些定义过软工集市的人。点击卡片，查看他们的集市主页、在招聘主页上的展示与联系方式。';
+        if (s.history_settings.hall_intro === oldHallIntro) {
+            s.history_settings.hall_intro =
+                '记录曾为软工集市做出重要贡献的成员。点击卡片，查看他们的集市主页、招聘主页资料与联系方式。';
+            s.history_settings.updated_at = nowIso();
+        }
+    }
+    // v11：「年轮」定名为「年鉴」；只替换旧默认标题，保留管理员自定义
+    if (version < 11) {
+        if (s.history_settings.title === '软工集市年轮') {
+            s.history_settings.title = '软工集市年鉴';
+            s.history_settings.updated_at = nowIso();
+        }
+    }
+    // v10：名人堂成员必须关联系统注册用户；旧数据按姓名/邮箱尽量回填
+    if (version < 10) {
+        for (const h of s.hall_of_fame) {
+            if (h.user_id)
+                continue;
+            const matched = s.users.find((u) => (h.name && u.name === h.name) ||
+                (h.contact_email && u.email.toLowerCase() === h.contact_email.toLowerCase()));
+            if (matched) {
+                h.user_id = matched.id;
+                if (!h.name)
+                    h.name = matched.name;
+                if (!h.avatar)
+                    h.avatar = matched.avatar;
             }
         }
     }
@@ -717,6 +937,7 @@ export async function ensureSeeds() {
             bonus: '',
             description,
             headcount: 2,
+            auto_approve: 0,
             enabled: 1,
             sort_order: 1,
             created_at: t,
@@ -794,7 +1015,7 @@ export async function ensureSeeds() {
             {
                 category: '社团生活',
                 question: '加入后可以长期参与吗？',
-                answer: '可以。社团成员可以持续参与项目与活动；投入较多、表现积极的同学可以承担核心成员或项目负责人角色。',
+                answer: '可以。团队成员可以持续参与项目与活动；投入较多、表现积极的同学可以承担核心成员或项目负责人角色。',
                 sort_order: 2,
                 enabled: 1,
             },
@@ -819,25 +1040,96 @@ export async function ensureSeeds() {
                 sort_order: 2,
                 enabled: 1,
             },
-            {
-                category: '开发者体系',
-                question: '技术部（圆桌）答辩怎么进行？',
-                answer: '项目开发者可在「我的身份」发起答辩。一级由本部门负责人陈述事实并回避打分，二级由其他 2-3 个部门负责人交叉评审，三级由学院/外院资源方代表评估你的资源分配主张。通过后按部门席位进入圆桌，席位已满则进入候补队列。',
-                sort_order: 3,
-                enabled: 1,
-            },
-            {
-                category: '开发者体系',
-                question: '技术部席位如何分配？会退出吗？',
-                answer: '席位按部门「基础保底 + 浮动产出」分配：每个部门至少 1 个保底席位，浮动席位根据出人贡献、产品产出与社区活跃度评估。圆桌成员卸任产品负责人或年度复审未达产出要求时，会自动退出圆桌并释放席位，候补者按顺序递补。',
-                sort_order: 4,
-                enabled: 1,
-            },
         ];
         for (const f of seeds) {
             s.faqs.push({
                 id: nextId('faqs'),
                 ...f,
+                created_at: t,
+                updated_at: t,
+            });
+        }
+        changed = true;
+    }
+    // 5) 集市历史章节种子（仅在从未创建过章节时播种，管理员清空后不再回灌）
+    if (s.history_chapters.length === 0 && s.seq.history_chapters === 0) {
+        const t = nowIso();
+        const chapters = [
+            {
+                kicker: '序章',
+                title: '从一张招新文档开始',
+                era: '起点',
+                summary: '软工集市最初不是平台，只是一群愿意把想法做出来的同学。',
+                content: [
+                    '软工集市诞生于一个很朴素的想法：**让热爱技术的人聚在一起，把想法真正做出来。**',
+                    '',
+                    '最早的时候，这里只有一份招新文档、几个还没做完的项目，和一群愿意在课后留下来调试代码的人。我们没有成熟的流程，也没有复杂的层级，只有一条默认的共识——',
+                    '',
+                    '> 做出来的东西，要真的有人用。',
+                    '',
+                    '这份共识，后来变成了集市所有部门的起点。',
+                ].join('\n'),
+                sort_order: 1,
+                enabled: 1,
+            },
+            {
+                kicker: '第一章',
+                title: '让每个人找到自己的位置',
+                era: '部门与双选',
+                summary: '部门不是壁垒，而是让人和项目彼此找到的坐标系。',
+                content: [
+                    '随着项目变多，一个问题开始出现：**新同学应该从哪里开始？**',
+                    '',
+                    '我们逐渐把集市拆成一个个有明确方向的项目部门，用岗位把「想做什么」和「正在做什么」连接起来。报名、沟通、双向确认——每一步都不长，但足够让双方认真做一次选择。',
+                    '',
+                    '- 同学在「部门岗位」投递感兴趣的部门；',
+                    '- 部门安排一次轻量沟通，了解动机与时间投入；',
+                    '- 双方确认后，身份从「集市开发者」转为「项目开发者」。',
+                    '',
+                    '未匹配成功也没有关系。你仍然保留集市开发者身份，可以继续使用公开资源、参加开发者工坊，等下一次更合适的机会。',
+                ].join('\n'),
+                sort_order: 2,
+                enabled: 1,
+            },
+            {
+                kicker: '第二章',
+                title: '把规则写下来',
+                era: '技术部与圆桌',
+                summary: '席位、答辩与公示，让资源分配有据可循。',
+                content: [
+                    '当集市开始承接真实需求，**资源怎么分**就成了绕不开的问题。',
+                    '',
+                    '我们建立了技术部（圆桌）与多级答辩机制：项目开发者可以发起答辩，一级由本部门负责人陈述事实，二级由其他部门交叉评审，三级由学院/外院资源方代表评估「你进入技术部后，主张如何帮助学院更好分配资源」。',
+                    '',
+                    '> 答辩不是考试，而是一次公开的资源分配讨论。',
+                    '',
+                    '每个部门至少保留一个保底席位，浮动席位按交付、使用、出人与社区活跃度评估。席位变动与晋升结果会在「公示」中留档，所有人都可以对照审计。',
+                ].join('\n'),
+                sort_order: 3,
+                enabled: 1,
+            },
+            {
+                kicker: '现在',
+                title: '继续向前',
+                era: '未完待续',
+                summary: '从招聘页面，到一套完整的开发者平台。',
+                content: [
+                    '今天的软工集市，已经不只是招新。',
+                    '',
+                    '统一的开发者身份、在线简历与 PDF 解析、部门双选、多级答辩、席位公示、常见问题……这些工具把过去散落在群聊和文档里的流程，慢慢变成了一套可以复用、可以审计的系统。',
+                    '',
+                    '但工具从来不是终点。真正让集市成立的，仍然是那些愿意在深夜把最后一个 bug 修完、愿意把机会让给更合适的人、愿意把经验写下来留给后来者的人。',
+                    '',
+                    '**这页历史还在继续。**',
+                ].join('\n'),
+                sort_order: 4,
+                enabled: 1,
+            },
+        ];
+        for (const c of chapters) {
+            s.history_chapters.push({
+                id: nextId('history_chapters'),
+                ...c,
                 created_at: t,
                 updated_at: t,
             });

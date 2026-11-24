@@ -9,6 +9,7 @@
       <nav class="site-nav">
         <RouterLink to="/" exact-active-class="active">首页</RouterLink>
         <RouterLink to="/jobs" active-class="active">部门岗位</RouterLink>
+        <RouterLink to="/projects" active-class="active">项目广场</RouterLink>
         <RouterLink to="/history" active-class="active">团队故事</RouterLink>
         <RouterLink to="/faq" active-class="active">常见问题</RouterLink>
         <RouterLink v-if="isStaff" to="/admin" active-class="active">管理后台</RouterLink>

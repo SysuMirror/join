@@ -200,11 +200,11 @@ function teamResumeFor(userId: number, resumeId = 0) {
 meRouter.get('/join-team', requireUser, (req, res) => {
   const user = getCurrentUser(req)!
   const resume = teamResumeFor(user.id)
-  const missing = resume ? resumeMissingFields(resume) : ['简历']
   ok(res, {
-    ready: Boolean(resume) && missing.length === 0,
+    // 开发者权限在登录时自动开通；ready 保留给旧前端，表示当前是否可手动重试
+    ready: user.status === 'active',
     resume_id: resume?.id || 0,
-    missing_fields: missing,
+    missing_fields: [],
     sso_developer: user.sso_developer === 1,
     sso_developer_at: user.sso_developer_at || '',
     email: user.email || resume?.email || '',
@@ -218,21 +218,9 @@ meRouter.post('/join-team', requireUser, async (req, res) => {
     return
   }
   const b = (req.body || {}) as Record<string, unknown>
+  // 登录时已自动开通；这里只作为手动重试入口，不再要求简历完整。
   const resume = teamResumeFor(user.id, Number(b.resume_id) || 0)
-  if (!resume) {
-    fail(res, 400, '请先在「我的简历」中创建一份简历')
-    return
-  }
-  const missing = resumeMissingFields(resume)
-  if (missing.length) {
-    res.status(400).json({
-      code: 400,
-      message: `请先完善简历：${missing.join('、')}`,
-      data: { missing_fields: missing, resume_id: resume.id },
-    })
-    return
-  }
-  const email = (user.email || resume.email || '').trim().toLowerCase()
+  const email = (user.email || resume?.email || '').trim().toLowerCase()
   if (!email) {
     fail(res, 400, '账号缺少邮箱，无法开通开发者权限，请联系管理员')
     return
@@ -265,7 +253,7 @@ meRouter.post('/join-team', requireUser, async (req, res) => {
     {
       developer: true,
       identity: userIdentityView(user),
-      resume_id: resume.id,
+      resume_id: resume?.id || 0,
       sso_developer_at: t,
     },
     '你已成为软工集市开发者',

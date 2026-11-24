@@ -113,6 +113,57 @@ export async function fetchUserInfo(accessToken) {
         : body;
     return data;
 }
+export function unissoUserIsActive(user) {
+    const v = user.active;
+    if (v === undefined || v === null)
+        return true;
+    if (typeof v === 'boolean')
+        return v;
+    if (typeof v === 'number')
+        return v !== 0;
+    return !['0', 'false', 'inactive', 'disabled'].includes(String(v).toLowerCase());
+}
+let usersListCache = null;
+/**
+ * 查询 UniSSO 全部用户（M2M，/api/oauth/users/list）。
+ * 管理员邀请场景使用：即使对方还没在本平台注册，也能查到并邀请。
+ * 缓存 60 秒，避免后台搜索反复打 SSO。
+ */
+export async function listUnissoUsers(force = false) {
+    const ttl = 60_000;
+    if (!force && usersListCache && Date.now() - usersListCache.at < ttl) {
+        return usersListCache.users;
+    }
+    const res = await fetchWithTimeout(`${config.unisso.issuer}/api/oauth/users/list`, 15_000, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+            client_id: config.unisso.clientId,
+            client_secret: config.unisso.clientSecret,
+        }),
+    });
+    const text = await res.text();
+    let body;
+    try {
+        body = JSON.parse(text);
+    }
+    catch {
+        throw new Error(`UniSSO 用户目录返回非 JSON（HTTP ${res.status}）`);
+    }
+    if (!res.ok || body.ok === false) {
+        const msg = String(body.message || body.error_description || body.error || '').trim() ||
+            `HTTP ${res.status}`;
+        throw new Error(`UniSSO 用户目录查询失败：${msg}`);
+    }
+    const raw = Array.isArray(body.users)
+        ? body.users
+        : body.data && typeof body.data === 'object' && Array.isArray(body.data.users)
+            ? body.data.users
+            : [];
+    const users = raw.filter((x) => Boolean(x && typeof x === 'object'));
+    usersListCache = { at: Date.now(), users };
+    return users;
+}
 /**
  * 机器对机器密码校验（无感登录）：POST /api/oauth/password/verify。
  * 成功返回 { ok:true, user:{sub,internal,...} }；401 invalid_credentials；429 限频（调用方勿自动重试）。
@@ -138,6 +189,49 @@ export async function verifyPassword(email, password) {
     }
     catch {
         throw new Error(`UniSSO 密码校验接口返回非 JSON（HTTP ${res.status}）`);
+    }
+    return { ...json, status: res.status };
+}
+/**
+ * 开通 / 撤销 UniSSO 开发者权限（后端 M2M，不需要用户登录态）：
+ * POST /api/oauth/developer/update
+ * 幂等：重复提交同一值不会出错。
+ */
+export async function updateUnissoDeveloper(email, isDeveloper = true, timeoutMs = 12_000) {
+    const target = String(email || '').trim().toLowerCase();
+    if (!target) {
+        return { ok: false, status: 400, error: 'invalid_request', message: '缺少邮箱，无法开通开发者权限' };
+    }
+    if (!config.unisso.clientId || !config.unisso.clientSecret) {
+        return {
+            ok: false,
+            status: 503,
+            error: 'not_configured',
+            message: 'UniSSO 未配置，无法开通开发者权限',
+        };
+    }
+    const res = await fetchWithTimeout(`${config.unisso.issuer}/api/oauth/developer/update`, timeoutMs, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({
+            client_id: config.unisso.clientId,
+            client_secret: config.unisso.clientSecret,
+            email: target,
+            is_developer: isDeveloper,
+        }),
+    });
+    const text = await res.text();
+    let json;
+    try {
+        json = JSON.parse(text);
+    }
+    catch {
+        return {
+            ok: false,
+            status: res.status,
+            error: 'invalid_response',
+            message: `UniSSO 开发者接口返回非 JSON（HTTP ${res.status}）`,
+        };
     }
     return { ...json, status: res.status };
 }

@@ -18,20 +18,29 @@ unset NODE_ENV || true
 # 站点对外公网根（正文链接等）
 export PUBLIC_BASE="${PUBLIC_BASE:-${JOIN_PUBLIC_URL:-https://join.ssemarket.cn}}"
 
+# 临时：新版开发者平台先行指向 dev 环境，正式域名切换后删除本段
+# （supervisor 注入的是旧域名，这里显式覆盖；平台注入 JOIN_DEVELOPER_API_URL 时以它为准）
+export DEVELOPER_API_URL="${JOIN_DEVELOPER_API_URL:-https://ssemarket.cn:23063}"
+
 echo "[deploy] PORT=$PORT DATA_DIR=$DATA_DIR"
 echo "[deploy] PUBLIC_BASE=$PUBLIC_BASE (join platform)"
+echo "[deploy] DEVELOPER_API_URL=$DEVELOPER_API_URL"
 
-# 敏感值（JOIN_DEV_MODULE_PRIVATE_KEY / JOIN_SESSION_SECRET 等）一律由部署平台注入，
+# 敏感值（JOIN_SESSION_SECRET 等）一律由部署平台注入，
 # 不在代码/包内提供默认值，避免密钥落仓库。
-for v in JOIN_DEV_MODULE_SLUG JOIN_DEV_MODULE_PRIVATE_KEY JOIN_SESSION_SECRET; do
+for v in JOIN_SESSION_SECRET; do
   if [ -z "${!v:-}" ]; then
     echo "[deploy] FATAL: $v 未注入（请在部署平台环境变量中配置）" >&2
     exit 1
   fi
 done
-export JOIN_DEV_MODULE_SLUG
-export JOIN_DEV_MODULE_PRIVATE_KEY
 export JOIN_SESSION_SECRET
+
+# 开发者平台 join 接入：未注入时网站照常启动，只是 /api/developer/* 返回 503。
+# 根目录 .env 会在 node 启动时由 load-env 读取，这里一并检查，避免误报。
+if [ -z "${JOIN_API_KEY:-}" ] && ! grep -q '^JOIN_API_KEY=.' "$ROOT/.env" 2>/dev/null; then
+  echo "[deploy] WARN: JOIN_API_KEY 未注入，开发者平台项目申请暂不可用" >&2
+fi
 
 # 若包内有 server/.env，补缺（不覆盖已 export / 平台注入的键）
 if [ -f "$ROOT/server/.env" ]; then

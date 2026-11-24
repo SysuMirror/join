@@ -767,6 +767,34 @@ export interface JoinTeamResult {
   sso_developer_at: string
 }
 
+/** 开发者平台项目（/api/join/projects 只回 id 与 title） */
+export interface DeveloperProject {
+  id: number
+  title: string
+}
+
+export interface DeveloperProjectPage {
+  items: DeveloperProject[]
+  total: number
+  page: number
+  pageSize: number
+}
+
+export interface DeveloperApplicationRecord {
+  id: number
+  project_id: number
+  project_title: string
+  apply_id: number
+  status: string
+  duplicate: boolean
+  reopened: boolean
+  note: string
+  resume_id: number
+  resume_title: string
+  created_at: string
+  updated_at: string
+}
+
 function qs(params: Record<string, unknown>): string {
   const sp = new URLSearchParams()
   for (const [k, v] of Object.entries(params)) {
@@ -852,6 +880,17 @@ export const api = {
       { timeout: 120_000 },
     ),
   resumeFileUrl: (id: number) => `/api/me/resumes/${id}/file`,
+
+  // ===== 开发者平台项目申请 =====
+  developerProjects: (params: Record<string, unknown> = {}) =>
+    http.get<DeveloperProjectPage>(`api/developer/projects${qs(params)}`),
+  developerApplications: () => http.get<DeveloperApplicationRecord[]>('api/developer/applications'),
+  applyDeveloperProject: (body: {
+    project_id: number
+    project_title: string
+    resume_id: number
+    note?: string
+  }) => http.post<DeveloperApplicationRecord>('api/developer/applications', body, { timeout: 20_000 }),
 
   // ===== 管理端 =====
   adminMe: () => http.get<AdminSession>('api/admin/me'),
@@ -946,12 +985,6 @@ export const api = {
   adminUpdatePublicity: (id: number, body: Record<string, unknown>) =>
     http.put<Publicity>(`api/admin/publicities/${id}`, body),
   adminDeletePublicity: (id: number) => http.delete(`api/admin/publicities/${id}`),
-  adminRefreshOa: () =>
-    http.post<{ refreshed: number; total: number }>(
-      'api/admin/applications/refresh-oa',
-      {},
-      { timeout: 30_000 },
-    ),
 
   // ===== 集市历史 / 名人堂 =====
   adminHistoryMeta: () => http.get<AdminHistoryMeta>('api/admin/history/meta'),

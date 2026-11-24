@@ -6,11 +6,11 @@
       <header class="join-head">
         <div class="eyebrow">
           <span class="eyebrow-line" />
-          <span>Join the team</span>
+          <span>Developer access</span>
         </div>
-        <h1 class="join-title">加入软工集市团队</h1>
+        <h1 class="join-title">开发者身份</h1>
         <p class="join-sub">
-          还不确定想去哪个部门？先加入软工集市团队，完成基本信息后即可自动成为开发者。
+          使用集市统一身份登录后，系统会自动为你开通软工集市开发者权限，不需要再单独申请加入团队。
         </p>
       </header>
 
@@ -25,7 +25,7 @@
             <span class="join-step-no">1</span>
             <div>
               <h2>先登录</h2>
-              <p>使用集市统一身份登录，无需重复注册。</p>
+              <p>使用集市统一身份登录，登录成功后开发者权限自动开通。</p>
             </div>
           </div>
           <RouterLink class="btn btn-primary" :to="loginTo">登录后继续</RouterLink>
@@ -44,51 +44,24 @@
             </div>
           </div>
 
-          <template v-else>
-            <section class="join-card">
-              <div class="join-step-head">
-                <span class="join-step-no" :class="{ done: Boolean(status?.resume_id) }">
-                  {{ status?.resume_id ? '✓' : '2' }}
-                </span>
-                <div>
-                  <h2>完善基本信息</h2>
-                  <p v-if="!status?.resume_id">你还没有简历，先创建一份。</p>
-                  <p v-else-if="status.missing_fields.length">还差：{{ status.missing_fields.join('、') }}</p>
-                  <p v-else>简历信息已完整，可以继续加入。</p>
-                </div>
+          <section v-else class="join-card">
+            <div class="join-step-head">
+              <span class="join-step-no">!</span>
+              <div>
+                <h2>开发者权限暂未开通</h2>
+                <p>
+                  正常登录时会自动开通，这里显示未开通通常是统一身份服务暂时不可用。
+                  可以点下面的按钮重试，不需要再填写或完善其他资料。
+                </p>
               </div>
-
-              <div v-if="!status?.resume_id" class="join-actions">
-                <RouterLink class="btn btn-primary" :to="resumeNewTo">创建简历</RouterLink>
-              </div>
-              <div v-else-if="status.missing_fields.length" class="join-actions">
-                <RouterLink class="btn btn-primary" :to="resumeEditTo">完善简历</RouterLink>
-                <RouterLink class="btn btn-ghost" :to="resumeNewTo">新建另一份</RouterLink>
-              </div>
-            </section>
-
-            <section class="join-card" :class="{ muted: !status?.ready }">
-              <div class="join-step-head">
-                <span class="join-step-no" :class="{ done: status?.ready }">3</span>
-                <div>
-                  <h2>加入软工集市团队</h2>
-                  <p>
-                    加入后会同步在统一身份中标记为开发者，可用于集市开发者资源与后续部门选择。
-                  </p>
-                </div>
-              </div>
-              <div class="join-actions">
-                <button
-                  class="btn btn-primary"
-                  :disabled="!status?.ready || joining"
-                  @click="join"
-                >
-                  {{ joining ? '正在开通…' : '加入软工集市团队' }}
-                </button>
-                <span v-if="!status?.ready" class="join-hint">先完善上面的信息，按钮就会亮起。</span>
-              </div>
-            </section>
-          </template>
+            </div>
+            <div class="join-actions">
+              <button class="btn btn-primary" :disabled="joining" @click="join">
+                {{ joining ? '正在开通…' : '重试开通' }}
+              </button>
+              <span class="join-hint">多次失败请联系管理员。</span>
+            </div>
+          </section>
         </template>
       </template>
     </main>
@@ -119,14 +92,6 @@ const loginTo = computed(() => ({
   path: '/login',
   query: { redirect: route.fullPath },
 }))
-const resumeNewTo = computed(() => ({
-  path: '/me/resumes/new',
-  query: { redirect: '/join-team' },
-}))
-const resumeEditTo = computed(() => ({
-  path: status.value?.resume_id ? `/me/resumes/${status.value.resume_id}` : '/me/resumes/new',
-  query: { redirect: '/join-team' },
-}))
 
 async function load() {
   loading.value = true
@@ -143,13 +108,13 @@ async function load() {
 }
 
 async function join() {
-  if (!status.value?.ready || joining.value) return
+  if (joining.value) return
   joining.value = true
   error.value = ''
   notice.value = ''
   try {
-    const res = await api.joinTeam({ resume_id: status.value.resume_id })
-    status.value = { ...status.value, sso_developer: true }
+    const res = await api.joinTeam()
+    status.value = { ...(status.value ?? { ready: true, resume_id: 0, missing_fields: [], sso_developer: false, sso_developer_at: '', email: '' }), sso_developer: true }
     notice.value = '你已成为软工集市开发者'
     if (res?.identity) auth.setUser({ ...authState.user!, ...res.identity })
   } catch (e) {

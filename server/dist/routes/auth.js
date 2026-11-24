@@ -3,10 +3,21 @@ import { config, isUnissoConfigured } from '../config.js';
 import { db, now } from '../db.js';
 import { ok, fail, requireUser, getCurrentUser, isAdminSub, setSessionCookie, clearSessionCookie, parseCookies, SSO_COOKIE_NAMES, setSsoCookie, clearSsoCookie, readSsoSession, } from '../middleware.js';
 import { createSessionToken } from '../services/session.js';
+import { autoGrantDeveloperOnLogin } from '../services/developer-sync.js';
 import { developerNoFor, ensureDeveloperProfile, findUniqueUserByEmail, isStaffUser, isSuperAdminUser, mergeUserRows, userIdentityView, } from '../services/org.js';
 import { buildAuthorizeUrl, createPkcePair, createState, exchangeCode, fetchUserInfo, verifyIdToken, verifyPassword, verifySession, revokeSession, JwksError, } from '../unisso.js';
 export const authRouter = Router();
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+/**
+ * 真实客户端 IP：服务在 frps/nginx 中继之后，req.ip 永远是中继的地址，
+ * 不能直接用来做每用户限流（否则全站共用一个桶）。优先取 X-Forwarded-For 首跳。
+ */
+function clientIp(req) {
+    const xff = String(req.headers['x-forwarded-for'] || '')
+        .split(',')[0]
+        .trim();
+    return xff || String(req.ip || '') || 'unknown';
+}
 /** 静默 SSO 限流：同一 IP 每分钟最多 10 次 */
 const SSO_TRY_MAX = 10;
 const ssoTryHits = new Map();
@@ -27,27 +38,44 @@ function allowSsoTry(ip) {
     return entry.count <= SSO_TRY_MAX;
 }
 /**
- * 管理员登录落地：按 sub upsert 本地用户并授予后台权限。
- * 密码登录与静默 SSO 共用，避免两套行为漂移。
+ * 统一身份登录落地：按 sub upsert 本地用户。
+ * - 无感登录对所有用户开放；
+ * - sso/try 只对管理员开放，但复用同一套资料更新逻辑；
+ * - 管理员身份只依据 JOIN_ADMIN_SUBS / 站点配置，普通登录不会自动提权或降权。
  */
-async function persistAdminLogin(u, email) {
+async function persistUnissoLogin(u, email) {
     const sub = String(u.sub || u.sso_sub || '').trim();
     const s = db.getStore();
     const t = now();
+    const isSuper = isAdminSub(sub);
+    const name = String(u.name || u.preferred_username || '')
+        .replace(/[​-‍﻿]/g, '')
+        .trim()
+        .slice(0, 60) ||
+        (email ? email.split('@')[0] : '') ||
+        `用户${sub.slice(0, 6)}`;
+    const avatar = String(u.picture || '').trim().slice(0, 500);
+    const sseSub = String(u.sse_sub || '').trim();
+    const internal = u.internal === true ? 1 : 0;
     let user = s.users.find((x) => x.sso_sub && x.sso_sub === sub);
+    if (!user) {
+        const byEmail = email ? findUniqueUserByEmail(email, sub) : null;
+        if (byEmail)
+            user = byEmail;
+    }
     if (!user) {
         const id = db.nextId('users');
         user = {
             id,
             email,
-            name: String(u.name || u.preferred_username || '').trim().slice(0, 60) || email.split('@')[0],
-            is_admin: 1,
-            system_role: 'super_admin',
+            name,
+            is_admin: isSuper ? 1 : 0,
+            system_role: isSuper ? 'super_admin' : 'user',
             reviewer_role: '',
-            avatar: String(u.picture || '').trim().slice(0, 500),
+            avatar,
             sso_sub: sub,
-            sse_sub: String(u.sse_sub || '').trim(),
-            internal: 1,
+            sse_sub: sseSub,
+            internal,
             roles: '',
             provider: 'unisso',
             last_login_at: t,
@@ -60,6 +88,8 @@ async function persistAdminLogin(u, email) {
             developer_bio: '',
             developer_skills: '',
             developer_links: '',
+            sso_developer: 0,
+            sso_developer_at: '',
             created_at: t,
         };
         s.users.push(user);
@@ -67,20 +97,30 @@ async function persistAdminLogin(u, email) {
     else {
         if (email)
             user.email = email;
-        user.name = String(u.name || u.preferred_username || '').trim().slice(0, 60) || user.name;
-        const avatar = String(u.picture || '').trim().slice(0, 500);
+        if (name)
+            user.name = name;
         if (avatar)
             user.avatar = avatar;
-        const sseSub = String(u.sse_sub || '').trim();
         if (sseSub)
             user.sse_sub = sseSub;
         user.sso_sub = sub;
-        user.internal = 1;
-        user.is_admin = 1;
-        user.system_role = 'super_admin';
+        user.internal = internal;
+        user.provider = 'unisso';
+        if (isSuper) {
+            user.is_admin = 1;
+            user.system_role = 'super_admin';
+        }
         user.last_login_at = t;
     }
+    // 登录响应里带 developer claim 时同步本地标记（无需额外 update 调用）
+    if (u.developer === true) {
+        user.sso_developer = 1;
+        if (!user.sso_developer_at)
+            user.sso_developer_at = t;
+    }
     ensureDeveloperProfile(user);
+    // 登录即自动开通开发者权限，无需再走「加入软工集市团队」申请
+    await autoGrantDeveloperOnLogin(user);
     await db.persist();
     return user;
 }
@@ -159,14 +199,17 @@ authRouter.get('/sso/callback', async (req, res) => {
     const s = db.getStore();
     const stateRow = s.sso_states.find((st) => st.state === state);
     if (!stateRow) {
+        console.warn('[auth] SSO 回调失败: state 不存在（可能进程重启或跨实例）');
         loginErrorRedirect(res, '登录状态不存在，请重新登录');
         return;
     }
     if (stateRow.used === 1) {
+        console.warn('[auth] SSO 回调失败: state 已使用（重复回调）');
         loginErrorRedirect(res, '登录凭证已使用，请重新登录');
         return;
     }
     if (Date.parse(stateRow.expires_at) < Date.now()) {
+        console.warn('[auth] SSO 回调失败: state 已过期');
         loginErrorRedirect(res, '登录已过期，请重新登录');
         return;
     }
@@ -236,6 +279,8 @@ authRouter.get('/sso/callback', async (req, res) => {
                 developer_bio: '',
                 developer_skills: '',
                 developer_links: '',
+                sso_developer: 0,
+                sso_developer_at: '',
                 created_at: t,
             };
             s.users.push(user);
@@ -260,11 +305,19 @@ authRouter.get('/sso/callback', async (req, res) => {
             }
             user.last_login_at = t;
         }
+        if (info.developer === true) {
+            user.sso_developer = 1;
+            if (!user.sso_developer_at)
+                user.sso_developer_at = t;
+        }
         // 底座：注册/登录即成为「软工集市开发者」，无需审批
         ensureDeveloperProfile(user);
+        // 登录即自动开通 UniSSO 开发者权限，无需再申请加入团队
+        await autoGrantDeveloperOnLogin(user);
         await db.persist();
         const sessionToken = createSessionToken({ uid: user.id, email: user.email });
         setSessionCookie(req, res, sessionToken);
+        console.log(`[auth] SSO 回调成功: uid=${user.id} sub=${sub.slice(0, 8)}… return_to=${stateRow.return_to || config.unisso.defaultReturnTo}`);
         res.redirect(stateRow.return_to || config.unisso.defaultReturnTo);
     }
     catch (e) {
@@ -332,6 +385,10 @@ authRouter.post('/login', async (req, res) => {
         fail(res, 401, '邮箱或密码错误');
         return;
     }
+    if (result.status === 403) {
+        fail(res, 403, result.message || '统一身份应用未开启无感登录，请联系管理员');
+        return;
+    }
     if (result.status === 429) {
         fail(res, 429, result.message || '尝试过于频繁，请稍后再试');
         return;
@@ -346,16 +403,7 @@ authRouter.post('/login', async (req, res) => {
         fail(res, 502, '统一身份未返回用户标识 sub');
         return;
     }
-    // 管理端只对软件工程学院内部成员开放
-    if (u.internal !== true) {
-        fail(res, 403, '该账号不属于软件工程学院内部成员，无法进入管理后台');
-        return;
-    }
-    if (!isAdminSub(sub)) {
-        fail(res, 403, '该账号无后台管理权限');
-        return;
-    }
-    const user = await persistAdminLogin(u, email);
+    const user = await persistUnissoLogin(u, email);
     const token = createSessionToken({ uid: user.id, email: user.email });
     setSessionCookie(req, res, token);
     // 密码校验成功时 unisso 已签发父域 SSO 会话：原样种给浏览器
@@ -366,6 +414,7 @@ authRouter.post('/login', async (req, res) => {
             maxAge: result.sso_max_age,
         });
     }
+    console.log(`[auth] 无感登录成功: uid=${user.id} sub=${sub.slice(0, 8)}…`);
     ok(res, { token, user: mapUser(user) }, '登录成功');
 });
 /**
@@ -378,12 +427,14 @@ authRouter.post('/sso/try', async (req, res) => {
         fail(res, 503, '统一身份未配置');
         return;
     }
-    if (!allowSsoTry(String(req.ip || ''))) {
+    if (!allowSsoTry(clientIp(req))) {
+        console.warn('[auth] sso/try 限流:', clientIp(req));
         fail(res, 429, '尝试过于频繁，请稍后再试');
         return;
     }
     const sid = readSsoSession(req);
     if (!sid) {
+        // 匿名访问的常态：前端每次冷启动都会探测一次，这里不打日志（避免刷屏）。
         fail(res, 401, 'no_sso');
         return;
     }
@@ -397,31 +448,38 @@ authRouter.post('/sso/try', async (req, res) => {
         return;
     }
     if (result.status === 401) {
-        clearSsoCookie(res);
+        // 不要在这里删父域 Cookie：401 可能只是 SSO 侧会话刚建立尚未生效（短暂不一致），
+        // 删掉会把用户在其他 .ssemarket.cn 站点的登录态一起干掉。真正失效由 SSO 自己覆盖。
+        console.warn('[auth] sso/try 失败: invalid_sso（父域共享 Cookie 未被 SSO 接受）');
         fail(res, 401, 'invalid_sso');
         return;
     }
     if (result.status !== 200 || !result.ok) {
+        console.warn(`[auth] sso/try 失败: session/verify HTTP ${result.status} ${result.message || ''}`.trim());
         fail(res, 503, 'sso_unavailable');
         return;
     }
     const u = result.user || {};
     const sub = String(u.sub || u.sso_sub || '').trim();
     if (!sub) {
+        console.warn('[auth] sso/try 失败: session/verify 未返回 sub');
         fail(res, 502, '统一身份未返回用户标识 sub');
         return;
     }
     if (u.internal !== true) {
+        console.warn(`[auth] sso/try 拒绝: not_internal sub=${sub.slice(0, 8)}…`);
         fail(res, 401, 'not_internal');
         return;
     }
     if (!isAdminSub(sub)) {
+        console.warn(`[auth] sso/try 拒绝: not_admin sub=${sub.slice(0, 8)}…`);
         fail(res, 401, 'not_admin');
         return;
     }
     const email = String(u.email || '').trim().toLowerCase();
-    const user = await persistAdminLogin(u, email);
+    const user = await persistUnissoLogin(u, email);
     const token = createSessionToken({ uid: user.id, email: user.email });
     setSessionCookie(req, res, token);
+    console.log(`[auth] sso/try 成功: uid=${user.id} sub=${sub.slice(0, 8)}…`);
     ok(res, { token, user: mapUser(user) }, '登录成功');
 });

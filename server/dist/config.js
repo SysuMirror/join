@@ -23,17 +23,19 @@ export const config = {
         maxPdfPages: Math.max(1, Number(env('JOIN_PDF_MAX_PAGES', '30')) || 30),
     },
     /**
-     * 对接开发者平台的「模块」身份（用于调用 /api/open/* 的 SM2 签名）。
-     * 私钥 = 在开发者平台注册模块时一次性下发的模块私钥；platform 公钥根 = developer.ssemarket.cn。
-     * 必须通过环境变量注入，不作为默认值落包。
+     * 新版开发者平台（SysuMirror/developer）的 join 接入。
+     * join 用共享密钥直接调用其对外的 /api/join/*；不再使用旧的 SM2 模块认证与 OA 审批。
+     * 密钥必须通过环境变量注入，不作为默认值落包。
      */
     devPlatform: {
         /** 开发者平台 Base URL，默认主域 */
         baseUrl: env('DEVELOPER_API_URL', 'https://developer.ssemarket.cn').replace(/\/$/, ''),
-        /** 本站在开发者平台注册的模块 slug（模块认证第一段，签名串成员） */
-        moduleSlug: env('JOIN_DEV_MODULE_SLUG'),
-        /** 模块私钥（sm-crypto 64 hex；开发者平台注册模块时一次性下发，此后不落库） */
-        modulePrivateKey: env('JOIN_DEV_MODULE_PRIVATE_KEY'),
+        /** 共享密钥，与开发者平台侧的 JOIN_API_KEY 一致；留空时 /api/developer/* 返回 503 */
+        joinApiKey: env('JOIN_API_KEY'),
+        /** 简历外链签名密钥；未单独配置时复用登录会话密钥 */
+        resumeLinkSecret: env('JOIN_RESUME_LINK_SECRET') || env('JOIN_SESSION_SECRET'),
+        /** 简历外链有效期（天） */
+        resumeLinkDays: Math.max(1, Number(env('JOIN_RESUME_LINK_DAYS', '90')) || 90),
     },
     /**
      * UniSSO（OAuth2 Authorization Code + PKCE S256 / OIDC）。
@@ -51,6 +53,13 @@ export const config = {
     },
     /** 登录会话签名密钥（由部署平台注入的随机长字符串） */
     sessionSecret: env('JOIN_SESSION_SECRET'),
+    /** AI 简历解析（OpenAI 兼容 chat/completions） */
+    ai: {
+        url: env('JOIN_AI_API_URL', 'https://api.ssemarket.cn/v1/chat/completions'),
+        apiKey: env('JOIN_AI_API_KEY'),
+        model: env('JOIN_AI_MODEL', 'qwen-3.8-flash'),
+        timeoutMs: Math.max(3000, Number(env('JOIN_AI_TIMEOUT_MS', '30000')) || 30_000),
+    },
     /** 超级管理员 UniSSO sub 白名单（逗号分隔；站点配置 adminSubs 会合并进来） */
     adminSubs: env('JOIN_ADMIN_SUBS'),
 };
@@ -58,7 +67,11 @@ export const config = {
 export function isUnissoConfigured() {
     return Boolean(config.unisso.clientId && config.unisso.clientSecret);
 }
-/** 用于 fail-fast 启动校验 */
+/** AI 简历解析是否已配置 */
+export function isAiConfigured() {
+    return Boolean(config.ai.url && config.ai.apiKey);
+}
+/** 开发者平台 join 接入是否已配置（缺共享密钥时相关接口返回 503） */
 export function isDevPlatformConfigured() {
-    return Boolean(config.devPlatform.moduleSlug && config.devPlatform.modulePrivateKey);
+    return Boolean(config.devPlatform.baseUrl && config.devPlatform.joinApiKey);
 }

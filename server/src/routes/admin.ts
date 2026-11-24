@@ -8,8 +8,6 @@ import {
   getAdminContext,
   getCurrentUser,
 } from '../middleware.js'
-import { submitOa, queryOa } from '../dev-platform.js'
-import { buildOaBody } from './jobs.js'
 import {
   getDirectory,
   refreshSsoDirectory,
@@ -825,41 +823,6 @@ adminRouter.post('/applications/:id/reject', async (req, res) => {
   app.updated_at = t
   await db.persist()
   ok(res, mapApplication(app), '已驳回')
-})
-
-async function refreshOa(app: ApplicationRow): Promise<ReturnType<typeof mapApplication>> {
-  if (!app.oa_oid) return mapApplication(app)
-  const result = await queryOa(app.oa_oid)
-  const t = now()
-  if (result.data) {
-    app.oa_status = result.data.status
-    app.oa_timeline = JSON.stringify(result.data.timeline || [])
-    app.oa_checked_at = t
-    app.updated_at = t
-    await db.persist()
-  }
-  return mapApplication(app)
-}
-
-/** 批量轮询所有已推送且仍 pending 的申请 */
-adminRouter.post('/applications/refresh-oa', async (req, res) => {
-  const s = db.getStore()
-  const ctx = getAdminContext(req)
-  const scopedJobIds = new Set(
-    s.jobs
-      .filter((j) => ctx.global || ctx.departmentIds.includes(j.department_id))
-      .map((j) => j.id),
-  )
-  const targets = s.applications.filter(
-    (a) =>
-      scopedJobIds.has(a.job_id) && a.status === 'passed' && a.oa_oid && a.oa_status === 'pending',
-  )
-  let updated = 0
-  for (const app of targets) {
-    await refreshOa(app)
-    updated += 1
-  }
-  ok(res, { refreshed: updated, total: targets.length })
 })
 
 // ===== 成员与权限（人事系统） =====

@@ -18,7 +18,7 @@
             <RouterLink class="btn btn-primary btn-lg" to="/jobs">
               查看岗位 <span class="arrow">→</span>
             </RouterLink>
-            <RouterLink class="btn btn-ghost btn-lg" to="/join-team">加入软工集市团队</RouterLink>
+            <RouterLink class="btn btn-ghost btn-lg" to="/join-team">成为开发者</RouterLink>
           </div>
           <div v-if="site?.stats" class="hero-stats">
             <span><b>{{ site.stats.openJobs }}</b> 个岗位在招</span>

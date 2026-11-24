@@ -13,8 +13,7 @@
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "nodemailer": "^6.9.16",
-    "pdfjs-dist": "^6.4.299",
-    "sm-crypto": "^0.5.7"
+    "pdfjs-dist": "^6.4.299"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",

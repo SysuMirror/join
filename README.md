@@ -9,6 +9,7 @@
 | 首页 | https://join.ssemarket.cn | 品牌、管理员维护的团队介绍与常见问题 |
 | 部门岗位 | https://join.ssemarket.cn/jobs | 关键词 / 部门 / 方向 / 类型 / 地点筛选 |
 | 岗位详情 | https://join.ssemarket.cn/jobs/:slug | 职责、要求、部门介绍、登录后报名 |
+| 项目广场 | https://join.ssemarket.cn/projects | 浏览开发者平台的项目，选简历申请加入（leader 在开发者平台审批） |
 | 席位与晋升公示 | https://join.ssemarket.cn/teams | 会议公示列表 + 技术部席位名额表 |
 | 部门介绍 | https://join.ssemarket.cn/departments/:slug | 负责人填写的部门介绍与部门岗位 |
 | 公示详情 | https://join.ssemarket.cn/publicity/:id | 自动生成的会议公示文档（可打印 / 复制） |
@@ -169,7 +170,7 @@
 登录页默认展示邮箱 + 密码表单，调用 `POST /api/auth/login`：
 
 1. 服务端调用 UniSSO `POST /api/oauth/password/verify`（M2M，携带 client_id / client_secret）；
-2. 成功响应按 `sub` upsert 本地用户，首次登录自动获得「软工集市开发者」身份；
+2. 成功响应按 `sub` upsert 本地用户，首次登录自动获得「软工集市开发者」身份，并自动向 UniSSO 同步开发者权限（`is_developer=true`）；
 3. 签发本应用 HMAC 会话 Cookie（HttpOnly），并按 UniSSO 返回的 `sso_session / sso_cookie_name / sso_cookie_domain / sso_max_age` 种父域共享 Cookie；
 4. 401 / 403 / 429 分别透传「邮箱或密码错误 / 应用未开启无感登录 / 尝试过于频繁」；
 5. 管理员与普通用户共用该入口，后台权限只由 `JOIN_ADMIN_SUBS` 与站点配置决定。
@@ -223,11 +224,13 @@ UNISSO_DEFAULT_RETURN_TO=/me
 - **报名管理**：选择简历报名；同一岗位未通过/撤回后可重新报名；报名保存简历快照。
 - **双选确认**：普通岗位部门通过后本人确认才进组；个人中心实时展示阶段。
 
-## 五之二、加入软工集市团队（通用入口）
+## 五之二、登录即自动开通开发者权限
 
-- 首页 / 部门岗位页提供「加入软工集市团队」入口，适合还不确定方向的同学。
-- 用户登录后，系统检查其默认简历是否包含姓名、联系方式、教育背景、技能或项目经历；不完整时引导去完善简历。
-- 信息完整后点击加入：调用 UniSSO `POST /api/oauth/developer/update` 把该用户标记为开发者（`is_developer=true`），同时在本地记录 `sso_developer`。
+- **使用集市统一身份登录成功时，系统自动调用 UniSSO `POST /api/oauth/developer/update` 把该用户标记为开发者（`is_developer=true`）**，同时在本地记录 `sso_developer` / `sso_developer_at`。
+- 不再要求用户先申请加入「软工集市团队」或先完善简历；登录（邮箱密码无感登录、OAuth 回调、静默 SSO）都会触发。
+- 已是开发者、账号已退出（`status=exited`）、缺少邮箱或 UniSSO 未配置时跳过。
+- 开通请求最多等待 4 秒：失败只记日志、**不阻断登录**，下次登录自动重试。
+- `/join-team` 页面保留为「开发者身份」状态页；如果自动开通因 SSO 临时不可用失败，可在页面点「重试开通」（`POST /api/me/join-team`，无需简历）或重新登录。
 - 接口幂等，可重复开通；SSO 不可用时返回明确错误，不静默成功。
 
 ## 五之三、后台用户目录缓存
@@ -281,9 +284,10 @@ cd ../web && npm run build      # vue-tsc + vite → web/dist
 
 | 变量 | 必填 | 说明 |
 |------|------|------|
-| `JOIN_DEV_MODULE_SLUG` | ✅ | 开发者平台模块 slug（OA 推送兼容） |
-| `JOIN_DEV_MODULE_PRIVATE_KEY` | ✅ | 开发者平台模块私钥（SM2） |
 | `JOIN_SESSION_SECRET` | ✅ | 会话 HMAC 密钥 |
+| `JOIN_API_KEY` | 项目广场必填 | 与开发者平台一致的共享密钥；留空时 `/api/developer/*` 返回 503 |
+| `JOIN_RESUME_LINK_SECRET` | 可选 | 简历外链签名密钥，默认复用 `JOIN_SESSION_SECRET` |
+| `JOIN_RESUME_LINK_DAYS` | 可选 | 简历外链有效期（天），默认 `90` |
 | `JOIN_ADMIN_EMAILS` | 建议 | 启动引导超管邮箱（逗号分隔） |
 | `UNISSO_CLIENT_ID` / `UNISSO_CLIENT_SECRET` | SSO 必填 | UniSSO 应用凭证 |
 | `UNISSO_ISSUER` | 可选 | 默认 `https://sso.ssemarket.cn` |
@@ -389,8 +393,8 @@ join-platform/
 | POST | `/api/me/defenses/:id/withdraw` | 撤回答辩 |
 | POST | `/api/me/reviews/:id` | 提交评审（一级事实 / 二三级投票） |
 | POST | `/api/me/applications/:id/confirm` | 本人确认部门双选 |
-| GET | `/api/me/join-team` | 通用加入入口的简历完整度 / 开发者权限状态 |
-| POST | `/api/me/join-team` | 检查简历完整后调用 UniSSO 开通开发者权限 |
+| GET | `/api/me/join-team` | 开发者权限状态（登录时已自动开通，这里用于查看/兜底） |
+| POST | `/api/me/join-team` | 手动重试开通 UniSSO 开发者权限（无需简历） |
 | GET | `/api/admin/users` | 用户搜索（角色/层级/部门/状态/分页） |
 | PATCH | `/api/admin/users/:id/role` | 设置超管、资源方、部门管理员、负责人 |
 | PATCH | `/api/admin/users/:id/identity` | 调整层级、部门、状态、简介 |

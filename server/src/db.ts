@@ -140,9 +140,9 @@ export type ApplicationRow = {
   review_note: string
   /** 初审人 */
   reviewer: string
-  /** 推送到开发者平台的 OA oaid（模块内唯一业务键） */
+  /** 旧 OA 审批单号（历史字段，SM2/OA 链路已下线，不再写入） */
   oa_oid: string
-  /** 开发者平台 OA 当前状态（pending/approved/rejected）；从 /api/open/oa/query 轮询回填 */
+  /** 旧 OA 状态（历史字段，不再回填） */
   oa_status: string
   /** 最后一次查询到 OA 状态的操作时间 */
   oa_checked_at: string
@@ -388,6 +388,31 @@ export type ResumeRow = {
   updated_at: string
 }
 
+/** join 代用户向开发者平台提交的项目申请（本地留档，方便用户回看） */
+export type DeveloperApplicationRow = {
+  id: number
+  user_id: number
+  /** 提交时的 UniSSO sub（开发者平台侧的用户主键） */
+  sso_sub: string
+  project_id: number
+  /** 项目标题快照（开发者平台只回 id/title） */
+  project_title: string
+  /** 开发者平台返回的申请 id */
+  apply_id: number
+  /** waiting / accepted / rejected（提交时刻的状态） */
+  status: string
+  /** 本次提交是否命中了对方已有的申请 */
+  duplicate: number
+  /** 是否是被拒后重新打开 */
+  reopened: number
+  note: string
+  resume_id: number
+  /** 提交给开发者平台的带签名简历地址 */
+  resume_url: string
+  created_at: string
+  updated_at: string
+}
+
 /** 常见问题（Q&A） */
 export type FaqRow = {
   id: number
@@ -543,6 +568,7 @@ const SEQ_KEYS = [
   'history_chapters',
   'hall_of_fame',
   'hall_invites',
+  'dev_applications',
 ] as const
 
 type SeqKey = (typeof SEQ_KEYS)[number]
@@ -602,6 +628,7 @@ type Store = {
   history_settings: HistorySettingsRow
   site_config: SiteConfigRow
   sso_user_cache: SsoUserCache
+  dev_applications: DeveloperApplicationRow[]
 }
 
 function nowIso() {
@@ -625,6 +652,7 @@ function emptySeq(): Record<SeqKey, number> {
     history_chapters: 0,
     hall_of_fame: 0,
     hall_invites: 0,
+    dev_applications: 0,
   }
 }
 
@@ -679,6 +707,7 @@ function emptyStore(): Store {
     history_settings: defaultHistorySettings(),
     site_config: defaultSiteConfig(),
     sso_user_cache: { updated_at: '', users: [] },
+    dev_applications: [],
   }
 }
 
@@ -706,6 +735,7 @@ function migrate(s: Store): void {
   if (!s.hall_invites) s.hall_invites = []
   if (!s.sso_user_cache) s.sso_user_cache = { updated_at: '', users: [] }
   if (!Array.isArray(s.sso_user_cache.users)) s.sso_user_cache.users = []
+  if (!Array.isArray(s.dev_applications)) s.dev_applications = []
   if (s.sso_user_cache.updated_at == null) s.sso_user_cache.updated_at = ''
   const hsDef = defaultHistorySettings()
   if (!s.history_settings) s.history_settings = hsDef
